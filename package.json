@@ -1,0 +1,29 @@
+{
+  "name": "skilldock",
+  "version": "0.1.0",
+  "description": "SkillDock 技能货站 — Base 是仓库，Agent 是港口，Skill 是货",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -n server,client -c blue,green \"node server/index.js\" \"vite\"",
+    "server": "node server/index.js",
+    "client": "vite",
+    "build": "vite build",
+    "start": "node server/index.js"
+  },
+  "dependencies": {
+    "chokidar": "^3.6.0",
+    "express": "^4.21.0",
+    "lucide-react": "^0.456.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "autoprefixer": "^10.4.20",
+    "concurrently": "^9.1.0",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.17",
+    "vite": "^5.4.11"
+  }
+}
