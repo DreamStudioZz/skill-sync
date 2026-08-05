@@ -3,6 +3,9 @@ SkillDock.exe
 build/skilldock-linux
 build/bin/
 
+# go-winres 生成的中间资源（由 `go-winres make` 重建）
+*.syso
+
 # 配置与运行时数据（位于用户 home，非仓库内容）
 .skilldock/
 
