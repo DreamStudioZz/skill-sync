@@ -197,7 +197,6 @@
       case "open-edit-agent": openModal("edit-agent?agentId=" + encodeURIComponent(el.getAttribute("data-agent-id"))); return;
       case "open-add-agent": openModal("add-agent"); return;
       case "open-history": openModal("history"); return;
-      case "open-matrix": openModal("matrix"); return;
       case "toggle-theme": toggleTheme(); return;
       case "confirm-set-base": {
         var p = qs("#sd-base-input").value.trim();
@@ -209,15 +208,19 @@
         var name = qs("#sd-agent-name").value.trim();
         var path = qs("#sd-agent-path").value.trim();
         if (!name || !path) { toast("请提供名称和路径", "error"); return; }
-        api("/api/agents", "POST", { name: name, path: path, color: selectedColor, defaultMode: "copy" })
+        var modeEl = qs("#sd-agent-mode .sd-seg-opt.is-on");
+        var mode = modeEl ? modeEl.getAttribute("data-mode") : "copy";
+        api("/api/agents", "POST", { name: name, path: path, color: selectedColor, defaultMode: mode })
           .then(function () { closeModal(); loadDashboard(); toast("Agent「" + name + "」已添加"); })
           .catch(function (e) { toast(e.message, "error"); }); return;
       }
       case "confirm-edit-agent": {
         var id = qs("#sd-edit-id").value;
+        var modeEl = qs("#sd-agent-mode .sd-seg-opt.is-on");
+        var mode = modeEl ? modeEl.getAttribute("data-mode") : "copy";
         api("/api/agents?id=" + encodeURIComponent(id), "PUT", {
           name: qs("#sd-agent-name").value, path: qs("#sd-agent-path").value,
-          color: selectedColor, defaultMode: "copy"
+          color: selectedColor, defaultMode: mode
         }).then(function () { closeModal(); loadDashboard(); toast("Agent 已更新"); })
           .catch(function (e) { toast(e.message, "error"); }); return;
       }
@@ -230,7 +233,6 @@
       }
       case "apply-diff": applyDiff(el.getAttribute("data-agent-id")); return;
       case "confirm-drift": confirmDrift(el); return;
-      case "apply-matrix": applyMatrix(); return;
       case "rollback":
         api("/api/rollback", "POST", { historyId: el.getAttribute("data-history-id") })
           .then(function () { closeModal(); loadDashboard(); toast("已回滚"); })
@@ -293,23 +295,6 @@
       }).catch(function (e) { toast(e.message, "error"); });
   }
 
-  async function applyMatrix() {
-    var checks = qsa(".sd-matrix-check:checked");
-    var n = 0;
-    for (var i = 0; i < checks.length; i++) {
-      var parts = checks[i].getAttribute("data-key").split("||");
-      var agentId = parts[0], skillId = parts[1];
-      var st = checks[i].getAttribute("data-status");
-      try {
-        if (st === "stale") await api("/api/push", "POST", { skillId: skillId, agentId: agentId, mode: "" });
-        else await api("/api/sync", "POST", { skillId: skillId, agentId: agentId, mode: "" });
-        n++;
-      } catch (err) { toast(err.message, "error"); }
-    }
-    closeModal(); loadDashboard();
-    toast(n ? ("已应用 " + n + " 处变更") : "请先勾选要应用的变更");
-  }
-
   // ---- global click handler ----
   var event_target = null;
   document.addEventListener("click", function (e) {
@@ -324,6 +309,13 @@
     // BEFORE the generic color picker, otherwise only the color gets set.
     var presetEl = e.target.closest("[data-preset]");
     if (presetEl) { applyPreset(presetEl); return; }
+    var segOpt = e.target.closest(".sd-seg-opt");
+    if (segOpt) {
+      var seg = segOpt.parentElement;
+      seg.querySelectorAll(".sd-seg-opt").forEach(function (o) { o.classList.remove("is-on"); });
+      segOpt.classList.add("is-on");
+      return;
+    }
     var colorEl = e.target.closest("[data-color]");
     if (colorEl) { selectColor(colorEl.getAttribute("data-color"), colorEl); return; }
     var driftEl = e.target.closest("[data-drift]");

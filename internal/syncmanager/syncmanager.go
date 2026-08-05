@@ -40,10 +40,26 @@ func ComputeStatusMatrix(cfg models.Config) models.StatusMatrix {
 				continue
 			}
 
-			matrix[agent.ID][skill.ID] = checkCopyStatus(cfg, agent, skill, link, agentSkillDir)
+			if link.Mode == "link" {
+				matrix[agent.ID][skill.ID] = checkLinkStatus(cfg, skill)
+			} else {
+				matrix[agent.ID][skill.ID] = checkCopyStatus(cfg, agent, skill, link, agentSkillDir)
+			}
 		}
 	}
 	return matrix
+}
+
+// checkLinkStatus reports the state of a link-mode sync. A link is a live
+// pointer to the Base skill, so if the link exists and the Base skill still
+// exists it is effectively always "synced" (changes in Base show up
+// immediately). Stale/drifted do not apply to link mode.
+func checkLinkStatus(cfg models.Config, skill models.Skill) string {
+	baseSkillDir := filepath.Join(cfg.Base.Path, skill.ID)
+	if _, err := os.Stat(baseSkillDir); err != nil {
+		return "not_synced"
+	}
+	return "synced"
 }
 
 func findLink(links []models.Link, skillID string) *models.Link {
@@ -75,8 +91,10 @@ func checkCopyStatus(cfg models.Config, agent models.Agent, skill models.Skill, 
 	return "synced"
 }
 
-// SyncSkill copies a skill from the Base directory into the agent's skills
-// directory. Link mode was removed; copy is the only sync mode.
+// SyncSkill syncs a skill to an agent. modeOverride selects the sync mode
+// ("copy" or "link"); when empty the agent's DefaultMode is used (defaulting to
+// "copy"). Link mode creates a junction/symlink from the agent's skill
+// directory to the Base skill directory instead of copying files.
 func SyncSkill(cfg *models.Config, skillID, agentID, modeOverride string) (*models.SyncResult, error) {
 	agent := findAgent(cfg.Agents, agentID)
 	if agent == nil {
@@ -94,6 +112,14 @@ func SyncSkill(cfg *models.Config, skillID, agentID, modeOverride string) (*mode
 
 	config.EnsureAgentDir(*agent)
 
+	mode := modeOverride
+	if mode == "" {
+		mode = agent.DefaultMode
+	}
+	if mode != "link" {
+		mode = "copy"
+	}
+
 	var beforeHash *string
 
 	if _, err := os.Lstat(agentSkillDir); err == nil {
@@ -104,23 +130,28 @@ func SyncSkill(cfg *models.Config, skillID, agentID, modeOverride string) (*mode
 		config.SafeRm(agentSkillDir)
 	}
 
-	if err := config.CopyDir(baseSkillDir, agentSkillDir); err != nil {
-		return nil, fmt.Errorf("复制 skill 失败: %v", err)
-	}
-
 	afterHash := skill.ContentHash
+	if mode == "link" {
+		if err := config.CreateLink(baseSkillDir, agentSkillDir); err != nil {
+			return nil, fmt.Errorf("创建链接失败: %v", err)
+		}
+	} else {
+		if err := config.CopyDir(baseSkillDir, agentSkillDir); err != nil {
+			return nil, fmt.Errorf("复制 skill 失败: %v", err)
+		}
+	}
 
 	// Update or create link record
 	link := findLink(agent.Links, skillID)
 	if link == nil {
 		agent.Links = append(agent.Links, models.Link{
 			SkillID:        skillID,
-			Mode:           "copy",
+			Mode:           mode,
 			LastSyncedHash: afterHash,
 			LastSyncedAt:   time.Now().UTC().Format(time.RFC3339),
 		})
 	} else {
-		link.Mode = "copy"
+		link.Mode = mode
 		link.LastSyncedHash = afterHash
 		link.LastSyncedAt = time.Now().UTC().Format(time.RFC3339)
 	}
@@ -133,7 +164,7 @@ func SyncSkill(cfg *models.Config, skillID, agentID, modeOverride string) (*mode
 		SkillName:  skill.Name,
 		AgentID:    agentID,
 		AgentName:  agent.Name,
-		Mode:       "copy",
+		Mode:       mode,
 		BeforeHash: beforeHash,
 		AfterHash:  strPtrAlways(afterHash),
 	}
@@ -212,9 +243,17 @@ func UnsyncSkill(cfg *models.Config, skillID, agentID string) (*models.SyncResul
 }
 
 // PushChanges overwrites agent-side content with a fresh copy of the Base
-// version, refreshing the link record and history.
+// version. For link mode it simply re-links (a no-op that keeps the live link
+// pointing at Base), using the link's recorded mode.
 func PushChanges(cfg *models.Config, skillID, agentID string) (*models.SyncResult, error) {
-	return SyncSkill(cfg, skillID, agentID, "copy")
+	agent := findAgent(cfg.Agents, agentID)
+	mode := "copy"
+	if agent != nil {
+		if link := findLink(agent.Links, skillID); link != nil && link.Mode == "link" {
+			mode = "link"
+		}
+	}
+	return SyncSkill(cfg, skillID, agentID, mode)
 }
 
 // ResolveDrift handles drift resolution: keep, overwrite, or save_as_new.
@@ -222,6 +261,13 @@ func ResolveDrift(cfg *models.Config, skillID, agentID, action, newSkillName str
 	agent := findAgent(cfg.Agents, agentID)
 	if agent == nil {
 		return nil, fmt.Errorf("Agent 不存在")
+	}
+
+	// Determine the sync mode from the existing link so history records the
+	// real mode (copy or link) rather than always "copy".
+	driftMode := "copy"
+	if link := findLink(agent.Links, skillID); link != nil {
+		driftMode = link.Mode
 	}
 
 	switch action {
@@ -248,7 +294,7 @@ func ResolveDrift(cfg *models.Config, skillID, agentID, action, newSkillName str
 			SkillName:  skillName,
 			AgentID:    agentID,
 			AgentName:  agent.Name,
-			Mode:       "copy",
+			Mode:       driftMode,
 			BeforeHash: oldHash,
 			AfterHash:  strPtrAlways(currentHash),
 		})
@@ -289,7 +335,7 @@ func ResolveDrift(cfg *models.Config, skillID, agentID, action, newSkillName str
 			SkillName: newID,
 			AgentID:   agentID,
 			AgentName: agent.Name,
-			Mode:      "copy",
+			Mode:      driftMode,
 			Note:      &note,
 		})
 		matrix := ComputeStatusMatrix(*cfg)

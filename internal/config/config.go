@@ -84,24 +84,8 @@ func LoadConfig() models.Config {
 		cfg.History = []models.HistoryEntry{}
 	}
 
-	// Migrate legacy "link" mode to "copy": link (junction/symlink) sync was
-	// removed, so copy is now the only sync mode. Persist the migrated config.
-	migrated := false
-	for i := range cfg.Agents {
-		if cfg.Agents[i].DefaultMode == "link" {
-			cfg.Agents[i].DefaultMode = "copy"
-			migrated = true
-		}
-		for j := range cfg.Agents[i].Links {
-			if cfg.Agents[i].Links[j].Mode == "link" {
-				cfg.Agents[i].Links[j].Mode = "copy"
-				migrated = true
-			}
-		}
-	}
-	if migrated {
-		_ = SaveConfig(cfg)
-	}
+	// NOTE: "link" mode (junction/symlink) is a supported sync mode, so no
+	// link→copy migration is performed here.
 
 	return cfg
 }
@@ -217,33 +201,40 @@ func RestoreFromBackup(backupPath, agentSkillDir string) error {
 
 // SafeRm robustly deletes a file or directory, trying multiple strategies.
 // Returns true if the path is gone (or was never there), false if all strategies failed.
+//
+// IMPORTANT (link mode safety): a Windows directory junction is a reparse
+// point. os.RemoveAll would recurse INTO the junction's target and delete the
+// Base skill contents — catastrophic. To avoid that, Strategy 1 uses plain
+// os.Remove, which never recurses and therefore removes only the link itself
+// (a junction, a symlink, or an empty directory) without touching anything
+// beneath it. Only if that fails do we escalate to recursive removal, which is
+// then safe because the path was not a live junction.
 func SafeRm(targetPath string) bool {
 	// Check existence (Lstat catches broken symlinks too)
 	if _, err := os.Lstat(targetPath); err != nil {
 		return true // already gone
 	}
 
-	// Strategy 1: os.RemoveAll (Go's built-in recursive removal)
-	_ = os.RemoveAll(targetPath)
-	if _, err := os.Lstat(targetPath); err != nil {
+	// Strategy 1: plain Remove — safe for symlinks, junctions and empty dirs.
+	if err := os.Remove(targetPath); err == nil {
 		return true
 	}
-
-	// Strategy 2: Check if it's a symlink/junction and remove the link only
-	if info, err := os.Lstat(targetPath); err == nil {
-		if info.Mode()&os.ModeSymlink != 0 {
-			_ = os.Remove(targetPath)
-			if _, err := os.Lstat(targetPath); err != nil {
-				return true
-			}
-		}
+	if _, err := os.Lstat(targetPath); err != nil {
+		return true // removed by the plain Remove above
 	}
 
-	// Strategy 3: Platform-native command
+	// Strategy 2: platform-native removal of a real (non-link) directory.
 	if runtime.GOOS == "windows" {
-		cmd := HideConsoleWindow(exec.Command("powershell", "-NoProfile", "-Command",
+		// rmdir without /s removes a junction safely; on a real non-empty
+		// directory it fails and we fall through to Remove-Item below.
+		cmd := HideConsoleWindow(exec.Command("cmd", "/c", "rmdir", targetPath))
+		_ = cmd.Run()
+		if _, err := os.Lstat(targetPath); err != nil {
+			return true
+		}
+		cmd2 := HideConsoleWindow(exec.Command("powershell", "-NoProfile", "-Command",
 			"Remove-Item -Path \""+targetPath+"\" -Recurse -Force -ErrorAction SilentlyContinue"))
-		cmd.Run()
+		cmd2.Run()
 	} else {
 		exec.Command("rm", "-rf", targetPath).Run()
 	}
@@ -252,6 +243,27 @@ func SafeRm(targetPath string) bool {
 	}
 
 	return false
+}
+
+// CreateLink creates a link at linkPath that points to targetPath.
+// On Windows it creates a directory junction (mklink /J), which works for
+// directories without administrator privileges and is the safe choice for
+// skill sync (the link is removed by os.Remove / rmdir, never recursed into).
+// On other platforms it creates a symlink. linkPath must not already exist.
+func CreateLink(targetPath, linkPath string) error {
+	absTarget, err := filepath.Abs(targetPath)
+	if err != nil {
+		absTarget = targetPath
+	}
+	if runtime.GOOS == "windows" {
+		cmd := HideConsoleWindow(exec.Command("cmd", "/c", "mklink", "/J", linkPath, absTarget))
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("创建链接失败: %v (%s)", err, string(out))
+		}
+		return nil
+	}
+	return os.Symlink(absTarget, linkPath)
 }
 
 // GenerateID creates a unique agent/history ID using timestamp + atomic counter.

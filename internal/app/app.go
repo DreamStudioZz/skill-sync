@@ -316,7 +316,16 @@ func (a *App) SyncBatch(skillIDs, agentIDs []string, mode string) models.BatchSy
 	var errs []models.BatchSyncError
 	for _, skillID := range skillIDs {
 		for _, agentID := range agentIDs {
-			result, err := syncmanager.SyncSkill(&a.cfg, skillID, agentID, mode)
+			m := mode
+			if m == "" {
+				if ag := findAgentByID(a.cfg.Agents, agentID); ag != nil {
+					m = ag.DefaultMode
+				}
+				if m != "link" {
+					m = "copy"
+				}
+			}
+			result, err := syncmanager.SyncSkill(&a.cfg, skillID, agentID, m)
 			if err != nil {
 				errs = append(errs, models.BatchSyncError{SkillID: skillID, AgentID: agentID, Error: err.Error()})
 			} else {

@@ -48,9 +48,9 @@
         <span class="sd-agent-chip" style="background:#3E8EED22;color:#3E8EED">{{template "icon" "ship"}}</span>
         <span><b>Codex CLI</b><br/><span class="sd-muted sd-tiny">~/.agents/skills</span></span>
       </button>
-      <button class="sd-preset" data-preset="Gemini CLI" data-path="~/.gemini/skills" data-color="#4E9A51">
-        <span class="sd-agent-chip" style="background:#4E9A5122;color:#4E9A51">{{template "icon" "ship"}}</span>
-        <span><b>Gemini CLI</b><br/><span class="sd-muted sd-tiny">~/.gemini/skills</span></span>
+      <button class="sd-preset" data-preset="WorkBuddy" data-path="~/.workbuddy/skills" data-color="#1677FF">
+        <span class="sd-agent-chip" style="background:#1677FF22;color:#1677FF">{{template "icon" "ship"}}</span>
+        <span><b>WorkBuddy</b><br/><span class="sd-muted sd-tiny">~/.workbuddy/skills</span></span>
       </button>
       <button class="sd-preset" data-preset="Cursor" data-path="~/.cursor/skills" data-color="#A78BFA">
         <span class="sd-agent-chip" style="background:#A78BFA22;color:#A78BFA">{{template "icon" "ship"}}</span>
@@ -68,6 +68,13 @@
       <button class="sd-color-dot" style="background:{{$c}}" data-color="{{$c}}"></button>
       {{end}}
     </div>
+
+    <label class="sd-label">同步方式</label>
+    <div class="sd-seg" id="sd-agent-mode">
+      <button type="button" class="sd-seg-opt is-on" data-mode="copy">{{template "icon" "copy"}} 复制</button>
+      <button type="button" class="sd-seg-opt" data-mode="link">{{template "icon" "link"}} 链接</button>
+    </div>
+    <p class="sd-muted sd-tiny">复制：把 skill 文件拷贝到 Agent 目录。链接：用 junction/软链指向 Base，省空间且实时跟随 Base 更新。</p>
 
     <div class="sd-modal-foot">
       <button class="sd-btn sd-btn-ghost" data-action="close-modal">取消</button>
@@ -89,6 +96,12 @@
     <input class="sd-input" id="sd-agent-name" value="{{.Agent.Name}}">
     <label class="sd-label">路径</label>
     <input class="sd-input sd-mono" id="sd-agent-path" value="{{.Agent.Path}}">
+
+    <label class="sd-label">同步方式</label>
+    <div class="sd-seg" id="sd-agent-mode">
+      <button type="button" class="sd-seg-opt{{if ne .Agent.DefaultMode "link"}} is-on{{end}}" data-mode="copy">{{template "icon" "copy"}} 复制</button>
+      <button type="button" class="sd-seg-opt{{if eq .Agent.DefaultMode "link"}} is-on{{end}}" data-mode="link">{{template "icon" "link"}} 链接</button>
+    </div>
 
     <div class="sd-danger-zone">
       <p class="sd-danger-title">{{template "icon" "trash"}} 删除 Agent</p>
@@ -197,44 +210,3 @@
 </div>
 {{end}}
 
-{{define "matrix"}}
-<div class="sd-modal-overlay" data-action="close-modal">
-  <div class="sd-modal wide" data-stop="1">
-    <div class="sd-modal-head">
-      <h3>{{template "icon" "grid"}} 状态总览 · 矩阵视图</h3>
-      <button class="sd-icon-btn" data-action="close-modal">{{template "icon" "close"}}</button>
-    </div>
-    {{if eq (len .Config.Base.Skills) 0}}
-    <p class="sd-muted sd-center sd-py">Base 中没有 skill</p>
-    {{else}}
-    <div class="sd-matrix-wrap">
-      <table class="sd-matrix">
-        <thead>
-          <tr><th class="sd-matrix-skill">Skill</th>{{range .Agents}}<th>{{.Name}}</th>{{end}}</tr>
-        </thead>
-        <tbody>
-          {{$matrix := .Matrix}}
-          {{range .Config.Base.Skills}}
-          <tr>
-            <td class="sd-matrix-skill">{{.Name}}</td>
-            {{range $agent := $.Agents}}
-              {{$st := index (index $matrix $agent.ID) .ID}}
-              <td class="sd-matrix-cell">
-                {{template "statusBadge" $st}}
-                {{if or (eq $st "stale") (eq $st "not_synced") (eq $st "")}}
-                <input type="checkbox" class="sd-matrix-check" data-key="{{$agent.ID}}||{{.ID}}" data-status="{{$st}}">
-                {{end}}
-              </td>
-            {{end}}
-          </tr>
-          {{end}}
-        </tbody>
-      </table>
-    </div>
-    <div class="sd-modal-foot" id="sd-matrix-foot" style="display:none">
-      <button class="sd-btn sd-btn-primary" data-action="apply-matrix">{{template "icon" "sync"}} 应用选中变更</button>
-    </div>
-    {{end}}
-  </div>
-</div>
-{{end}}

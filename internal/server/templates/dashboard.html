@@ -30,7 +30,7 @@
       </div>
       <div class="sd-header-actions">
         {{if gt .StaleCount 0}}
-        <button class="sd-btn sd-btn-warn" data-action="open-matrix">{{template "icon" "bell"}} 检测到 {{.StaleCount}} 处更新</button>
+        <button class="sd-btn sd-btn-warn" data-action="scan">{{template "icon" "bell"}} 检测到 {{.StaleCount}} 处更新</button>
         {{end}}
         <button class="sd-btn sd-btn-ghost" data-action="open-history">{{template "icon" "history"}} 历史</button>
         <button class="sd-icon-btn" id="sd-theme-toggle" data-action="toggle-theme" title="切换浅色 / 深色">{{template "icon" "moon"}}</button>
@@ -101,7 +101,7 @@
                 </div>
               </div>
               <div class="sd-agent-tools">
-                <span class="sd-mode-badge">{{template "icon" "copy"}} 复制</span>
+                <span class="sd-mode-badge">{{if eq .DefaultMode "link"}}{{template "icon" "link"}} 链接{{else}}{{template "icon" "copy"}} 复制{{end}}</span>
                 <button class="sd-icon-btn" data-action="open-edit-agent" data-agent-id="{{.ID}}" title="编辑">{{template "icon" "edit"}}</button>
               </div>
             </div>
