@@ -28,9 +28,13 @@ func main() {
 	if port == "" {
 		port = "38291"
 	}
+	host := os.Getenv("SKILLDOCK_HOST")
+	if host == "" {
+		host = "127.0.0.1"
+	}
 
 	// Single-instance: grabbing the listen port is the lock.
-	ln, err := net.Listen("tcp", "127.0.0.1:"+port)
+	ln, err := net.Listen("tcp", net.JoinHostPort(host, port))
 	if err != nil {
 		openBrowser("http://127.0.0.1:" + port)
 		fmt.Println("SkillDock 已在运行，已为你打开浏览器。")

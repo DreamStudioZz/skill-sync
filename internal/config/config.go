@@ -9,7 +9,6 @@ import (
 	"runtime"
 	"strconv"
 	"sync/atomic"
-	"syscall"
 	"time"
 
 	"skilldock/internal/models"
@@ -23,7 +22,11 @@ var (
 
 func init() {
 	home, _ := os.UserHomeDir()
-	configDir = filepath.Join(home, ".skilldock")
+	base := os.Getenv("SKILLDOCK_HOME")
+	if base == "" {
+		base = filepath.Join(home, ".skilldock")
+	}
+	configDir = base
 	configFile = filepath.Join(configDir, "config.json")
 	backupDir = filepath.Join(configDir, "backups")
 }
@@ -210,18 +213,6 @@ func RestoreFromBackup(backupPath, agentSkillDir string) error {
 		SafeRm(agentSkillDir)
 	}
 	return CopyDir(backupPath, agentSkillDir)
-}
-
-// HideConsoleWindow configures an exec.Cmd to run without flashing a console
-// window on Windows (CREATE_NO_WINDOW). On other platforms it is a no-op.
-// Use this for every subprocess spawned by the app (PowerShell junction
-// creation, file explorer open, delete fallback) so the UI never flickers
-// a CLI window.
-func HideConsoleWindow(cmd *exec.Cmd) *exec.Cmd {
-	if runtime.GOOS == "windows" {
-		cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
-	}
-	return cmd
 }
 
 // SafeRm robustly deletes a file or directory, trying multiple strategies.

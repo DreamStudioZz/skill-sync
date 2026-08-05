@@ -319,11 +319,13 @@
     var browseEl = e.target.closest("[data-browse]");
     if (browseEl) { loadBrowse(browseEl.getAttribute("data-browse")); return; }
 
-    // color / preset / drift pickers
-    var colorEl = e.target.closest("[data-color]");
-    if (colorEl) { selectColor(colorEl.getAttribute("data-color"), colorEl); return; }
+    // preset / color / drift pickers
+    // NOTE: preset buttons also carry data-color, so they must be matched
+    // BEFORE the generic color picker, otherwise only the color gets set.
     var presetEl = e.target.closest("[data-preset]");
     if (presetEl) { applyPreset(presetEl); return; }
+    var colorEl = e.target.closest("[data-color]");
+    if (colorEl) { selectColor(colorEl.getAttribute("data-color"), colorEl); return; }
     var driftEl = e.target.closest("[data-drift]");
     if (driftEl) { selectDrift(driftEl.getAttribute("data-drift")); return; }
 

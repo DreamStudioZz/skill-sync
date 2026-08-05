@@ -1,5 +1,7 @@
 # 构建产物（可随时 go build 重建）
 SkillDock.exe
+build/skilldock-linux
+build/bin/
 
 # 配置与运行时数据（位于用户 home，非仓库内容）
 .skilldock/

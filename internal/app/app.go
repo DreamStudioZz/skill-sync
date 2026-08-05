@@ -9,7 +9,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strconv"
+	"strings"
 	"sync"
 
 	"skilldock/internal/config"
@@ -171,10 +173,22 @@ func (a *App) Browse(p string) (models.BrowseResult, error) {
 	}
 	var browseEntries []models.BrowseEntry
 	for _, e := range entries {
-		if e.IsDir() && e.Name()[0] != '.' {
+		if e.IsDir() {
 			browseEntries = append(browseEntries, models.BrowseEntry{Name: e.Name(), IsDir: true})
 		}
 	}
+	// Keep dot-directories (e.g. .codex / .claude / .config) visible and
+	// selectable, but sort them to the end so they don't clutter the normal
+	// listing. They were previously hidden by `name[0] != '.'`, which made
+	// agent/home dirs like .codex impossible to pick from the browser.
+	sort.SliceStable(browseEntries, func(i, j int) bool {
+		di := strings.HasPrefix(browseEntries[i].Name, ".")
+		dj := strings.HasPrefix(browseEntries[j].Name, ".")
+		if di != dj {
+			return !di // non-dot directories first
+		}
+		return browseEntries[i].Name < browseEntries[j].Name
+	})
 	parent := filepath.Dir(expanded)
 	if parent == expanded {
 		parent = ""
