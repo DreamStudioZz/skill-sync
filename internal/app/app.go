@@ -1,15 +1,16 @@
-package main
+// Package app holds the framework-agnostic application core for SkillDock.
+// It manages configuration, the file watcher, and all sync operations, and
+// broadcasts real-time events (config_updated / change_detected) through a
+// pluggable emitter so the HTTP server can relay them over SSE.
+package app
 
 import (
-	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strconv"
 	"sync"
-
-	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"skilldock/internal/config"
 	"skilldock/internal/models"
@@ -18,42 +19,50 @@ import (
 	"skilldock/internal/watcher"
 )
 
-// App is the Wails binding struct. All exported methods are callable from the frontend.
+// App is the in-memory application state holder.
 type App struct {
-	ctx     context.Context
-	cfg     models.Config
-	watcher *watcher.Watcher
 	mu      sync.Mutex
+	cfg     models.Config
+	wt      *watcher.Watcher
+	emitter func(eventType string, payload interface{})
 }
 
-// NewApp creates a new App instance.
-func NewApp() *App {
-	return &App{}
-}
-
-// startup is called by Wails when the app starts.
-func (a *App) startup(ctx context.Context) {
-	a.ctx = ctx
-	a.cfg = config.LoadConfig()
-
-	// Start the file watcher if base is set
+// New creates the App, loads the persisted config, and starts the file
+// watcher if a Base path is already configured.
+func New() *App {
+	a := &App{cfg: config.LoadConfig()}
 	if a.cfg.Base.Path != "" {
 		a.ensureWatcher()
 	}
+	return a
 }
 
-// shutdown is called when the app is closing.
-func (a *App) shutdown(ctx context.Context) {
-	if a.watcher != nil {
-		a.watcher.Stop()
+// SetEmitter registers a callback invoked for real-time events. The HTTP
+// layer uses it to push SSE messages.
+func (a *App) SetEmitter(e func(eventType string, payload interface{})) {
+	a.emitter = e
+}
+
+func (a *App) emit(eventType string, payload interface{}) {
+	if a.emitter != nil {
+		a.emitter(eventType, payload)
 	}
 }
 
-// ensureWatcher stops any existing watcher and starts a new one for the current base path.
+// Close stops the watcher.
+func (a *App) Close() {
+	if a.wt != nil {
+		a.wt.Stop()
+		a.wt = nil
+	}
+}
+
+// ensureWatcher (re)starts the file watcher for the current Base path. The
+// callback recomputes the status matrix and broadcasts updates.
 func (a *App) ensureWatcher() {
-	if a.watcher != nil {
-		a.watcher.Stop()
-		a.watcher = nil
+	if a.wt != nil {
+		a.wt.Stop()
+		a.wt = nil
 	}
 	if a.cfg.Base.Path == "" {
 		return
@@ -61,9 +70,6 @@ func (a *App) ensureWatcher() {
 	basePath := config.ExpandPath(a.cfg.Base.Path)
 	w, err := watcher.Start(basePath, func(newSkills []models.Skill) {
 		a.mu.Lock()
-		defer a.mu.Unlock()
-
-		// Compare to detect actual changes
 		oldHashes := map[string]string{}
 		for _, s := range a.cfg.Base.Skills {
 			oldHashes[s.ID] = s.ContentHash
@@ -79,25 +85,28 @@ func (a *App) ensureWatcher() {
 
 		config.SaveConfig(a.cfg)
 		matrix := syncmanager.ComputeStatusMatrix(a.cfg)
+		a.mu.Unlock()
 
-		wailsRuntime.EventsEmit(a.ctx, "config_updated", models.ConfigResponse{
-			Config:       a.cfg,
-			StatusMatrix: matrix,
-		})
-
+		a.emit("config_updated", models.ConfigResponse{Config: a.cfg, StatusMatrix: matrix})
 		if len(changedIDs) > 0 {
-			wailsRuntime.EventsEmit(a.ctx, "change_detected", map[string]interface{}{
+			a.emit("change_detected", map[string]interface{}{
 				"skills":  changedIDs,
 				"message": "检测到 " + strconv.Itoa(len(changedIDs)) + " 个 skill 有更新",
 			})
 		}
 	})
 	if err == nil {
-		a.watcher = w
+		a.wt = w
 	}
 }
 
-// --- Binding methods (callable from frontend via window.go.main.App.*) ---
+// broadcast emits config_updated after a mutation so other clients stay in sync.
+func (a *App) broadcast() {
+	matrix := syncmanager.ComputeStatusMatrix(a.cfg)
+	a.emit("config_updated", models.ConfigResponse{Config: a.cfg, StatusMatrix: matrix})
+}
+
+// --- Operations (mirrors the former Wails bindings) ---
 
 // GetConfig returns the current config and status matrix.
 func (a *App) GetConfig() models.ConfigResponse {
@@ -116,10 +125,6 @@ func (a *App) SetBase(basePath string) (models.ConfigResponse, error) {
 	if expanded == "" {
 		return models.ConfigResponse{}, &appError{"请提供 Base 路径"}
 	}
-	if _, err := filepath.Glob(expanded); err != nil {
-		return models.ConfigResponse{}, &appError{"路径无效: " + expanded}
-	}
-	// Check the directory exists
 	dir, err := filepath.Abs(expanded)
 	if err != nil {
 		return models.ConfigResponse{}, &appError{"路径无效: " + expanded}
@@ -131,14 +136,11 @@ func (a *App) SetBase(basePath string) (models.ConfigResponse, error) {
 	a.cfg.Base.Path = dir
 	a.cfg.Base.Skills = scanner.ScanBase(dir)
 	config.SaveConfig(a.cfg)
-
-	// Restart watcher (outside the lock — but we're holding it; that's OK since
-	// the watcher's callback uses its own lock acquisition via the closure)
-	// We unlock temporarily for the watcher start
 	a.mu.Unlock()
 	a.ensureWatcher()
 	a.mu.Lock()
 
+	a.broadcast()
 	matrix := syncmanager.ComputeStatusMatrix(a.cfg)
 	return models.ConfigResponse{Config: a.cfg, StatusMatrix: matrix}, nil
 }
@@ -152,11 +154,12 @@ func (a *App) ScanBase() (models.ConfigResponse, error) {
 	}
 	a.cfg.Base.Skills = scanner.ScanBase(a.cfg.Base.Path)
 	config.SaveConfig(a.cfg)
+	a.broadcast()
 	matrix := syncmanager.ComputeStatusMatrix(a.cfg)
 	return models.ConfigResponse{Config: a.cfg, StatusMatrix: matrix}, nil
 }
 
-// Browse lists subdirectories of a path (for the path picker UI).
+// Browse lists subdirectories of a path for the directory picker.
 func (a *App) Browse(p string) (models.BrowseResult, error) {
 	if p == "" {
 		p, _ = os.UserHomeDir()
@@ -201,7 +204,7 @@ func (a *App) AddAgent(name, agentPath, color, defaultMode string) (models.Confi
 		color = "#8B5CF6"
 	}
 	if defaultMode == "" {
-		defaultMode = "link"
+		defaultMode = "copy"
 	}
 	agent := models.Agent{
 		ID:          config.GenerateID("agent"),
@@ -218,6 +221,7 @@ func (a *App) AddAgent(name, agentPath, color, defaultMode string) (models.Confi
 	}
 	a.cfg.Agents = append(a.cfg.Agents, agent)
 	config.SaveConfig(a.cfg)
+	a.broadcast()
 	matrix := syncmanager.ComputeStatusMatrix(a.cfg)
 	return models.ConfigResponse{Config: a.cfg, StatusMatrix: matrix}, nil
 }
@@ -244,6 +248,7 @@ func (a *App) UpdateAgent(id, name, agentPath, color, defaultMode string) (model
 		agent.DefaultMode = defaultMode
 	}
 	config.SaveConfig(a.cfg)
+	a.broadcast()
 	matrix := syncmanager.ComputeStatusMatrix(a.cfg)
 	return models.ConfigResponse{Config: a.cfg, StatusMatrix: matrix}, nil
 }
@@ -271,6 +276,7 @@ func (a *App) DeleteAgent(id string, cleanup bool) (models.ConfigResponse, error
 	}
 	a.cfg.Agents = append(a.cfg.Agents[:idx], a.cfg.Agents[idx+1:]...)
 	config.SaveConfig(a.cfg)
+	a.broadcast()
 	matrix := syncmanager.ComputeStatusMatrix(a.cfg)
 	return models.ConfigResponse{Config: a.cfg, StatusMatrix: matrix}, nil
 }
@@ -285,6 +291,7 @@ func (a *App) SyncSkill(skillID, agentID, mode string) (models.SyncResult, error
 	}
 	a.cfg = result.Config
 	config.SaveConfig(a.cfg)
+	a.broadcast()
 	return *result, nil
 }
 
@@ -293,7 +300,6 @@ func (a *App) SyncBatch(skillIDs, agentIDs []string, mode string) models.BatchSy
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	var errs []models.BatchSyncError
-	degradedCount := 0
 	for _, skillID := range skillIDs {
 		for _, agentID := range agentIDs {
 			result, err := syncmanager.SyncSkill(&a.cfg, skillID, agentID, mode)
@@ -301,15 +307,13 @@ func (a *App) SyncBatch(skillIDs, agentIDs []string, mode string) models.BatchSy
 				errs = append(errs, models.BatchSyncError{SkillID: skillID, AgentID: agentID, Error: err.Error()})
 			} else {
 				a.cfg = result.Config
-				if result.Degraded {
-					degradedCount++
-				}
 			}
 		}
 	}
 	config.SaveConfig(a.cfg)
+	a.broadcast()
 	matrix := syncmanager.ComputeStatusMatrix(a.cfg)
-	return models.BatchSyncResult{Config: a.cfg, StatusMatrix: matrix, Errors: errs, DegradedCount: degradedCount}
+	return models.BatchSyncResult{Config: a.cfg, StatusMatrix: matrix, Errors: errs}
 }
 
 // UnsyncSkill removes a skill sync from an agent.
@@ -322,6 +326,7 @@ func (a *App) UnsyncSkill(skillID, agentID string) (models.SyncResult, error) {
 	}
 	a.cfg = result.Config
 	config.SaveConfig(a.cfg)
+	a.broadcast()
 	return *result, nil
 }
 
@@ -335,6 +340,7 @@ func (a *App) PushChanges(skillID, agentID string) (models.SyncResult, error) {
 	}
 	a.cfg = result.Config
 	config.SaveConfig(a.cfg)
+	a.broadcast()
 	return *result, nil
 }
 
@@ -351,10 +357,11 @@ func (a *App) ResolveDrift(skillID, agentID, action, newSkillName string) (model
 		a.cfg.Base.Skills = scanner.ScanBase(a.cfg.Base.Path)
 	}
 	config.SaveConfig(a.cfg)
+	a.broadcast()
 	return *result, nil
 }
 
-// GetHistory returns the most recent history entries.
+// GetHistory returns the most recent history entries (newest first).
 func (a *App) GetHistory(limit int) []models.HistoryEntry {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -367,7 +374,6 @@ func (a *App) GetHistory(limit int) []models.HistoryEntry {
 		start = 0
 	}
 	sub := hist[start:]
-	// Reverse
 	result := make([]models.HistoryEntry, len(sub))
 	for i, h := range sub {
 		result[len(sub)-1-i] = h
@@ -385,6 +391,7 @@ func (a *App) Rollback(historyID string) (models.ConfigResponse, error) {
 	}
 	a.cfg = result.Config
 	config.SaveConfig(a.cfg)
+	a.broadcast()
 	return *result, nil
 }
 
@@ -408,8 +415,6 @@ func (a *App) OpenPath(targetPath string) error {
 	var cmd *exec.Cmd
 	switch runtime.GOOS {
 	case "windows":
-		// Hide the console window so no cmd CLI window flashes before
-		// Explorer opens.
 		cmd = config.HideConsoleWindow(exec.Command("cmd", "/c", "start", "", expanded))
 	case "darwin":
 		cmd = exec.Command("open", expanded)

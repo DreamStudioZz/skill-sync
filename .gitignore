@@ -1,9 +1,18 @@
-node_modules/
-dist/
+# 构建产物（可随时 go build 重建）
+SkillDock.exe
+
+# 配置与运行时数据（位于用户 home，非仓库内容）
 .skilldock/
+
+# 日志与临时文件
 *.log
+
+# 环境变量
 .env
+
+# 系统 / IDE 缓存
 .DS_Store
 .idea
+
+# WorkBuddy 本地工具数据
 .workbuddy
-build

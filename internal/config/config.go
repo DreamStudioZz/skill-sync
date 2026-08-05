@@ -80,6 +80,26 @@ func LoadConfig() models.Config {
 	if cfg.History == nil {
 		cfg.History = []models.HistoryEntry{}
 	}
+
+	// Migrate legacy "link" mode to "copy": link (junction/symlink) sync was
+	// removed, so copy is now the only sync mode. Persist the migrated config.
+	migrated := false
+	for i := range cfg.Agents {
+		if cfg.Agents[i].DefaultMode == "link" {
+			cfg.Agents[i].DefaultMode = "copy"
+			migrated = true
+		}
+		for j := range cfg.Agents[i].Links {
+			if cfg.Agents[i].Links[j].Mode == "link" {
+				cfg.Agents[i].Links[j].Mode = "copy"
+				migrated = true
+			}
+		}
+	}
+	if migrated {
+		_ = SaveConfig(cfg)
+	}
+
 	return cfg
 }
 

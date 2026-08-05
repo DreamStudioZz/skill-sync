@@ -1,19 +1,15 @@
 #!/usr/bin/env bash
-# SkillDock 发布构建脚本
+# SkillDock 发布构建脚本（纯 Go，无 Wails / 无 WebView2）
 # 用法: ./scripts/build-release.sh
-# 说明: 分步执行，规避 vite emptyDir 在受限环境下的删除问题
 set -e
 cd "$(dirname "$0")/.."
 
-echo "==> [1/3] 清空 frontend/dist"
-rm -rf frontend/dist
+OUT="build/bin/SkillDock.exe"
+mkdir -p "$(dirname "$OUT")"
 
-echo "==> [2/3] 构建前端"
-(cd frontend && npm run build)
-
-echo "==> [3/3] 打包 (跳过前端与 bindings 生成)"
-export PATH="$PATH:$(go env GOPATH)/bin"
-wails build -s -skipbindings
+echo "==> 构建纯 Go 可执行文件"
+CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o "$OUT" .
 
 echo ""
-echo "✅ 构建完成: build/bin/SkillDock.exe"
+echo "✅ 构建完成: $OUT"
+echo "   运行即可在浏览器打开 http://127.0.0.1:38291"

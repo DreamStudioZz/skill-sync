@@ -71,12 +71,6 @@ type SyncResult struct {
 	Config       Config        `json:"config"`
 	StatusMatrix StatusMatrix  `json:"statusMatrix"`
 	HistoryEntry *HistoryEntry `json:"historyEntry"`
-	// ActualMode is the mode that actually took effect ("link" or "copy").
-	// It differs from the requested mode when link creation failed and the
-	// sync degraded to a copy.
-	ActualMode string `json:"actualMode"`
-	// Degraded is true when the requested link mode fell back to copy.
-	Degraded bool `json:"degraded"`
 }
 
 // DriftResult extends ConfigResponse with optional new skill ID.
@@ -101,7 +95,7 @@ type BrowseResult struct {
 
 // ChangeItem represents a stale/drifted skill and its affected agents.
 type ChangeItem struct {
-	Skill  Skill                  `json:"skill"`
+	Skill  Skill                 `json:"skill"`
 	Agents []ChangeAffectedAgent `json:"agents"`
 }
 
@@ -114,12 +108,9 @@ type ChangeAffectedAgent struct {
 
 // BatchSyncResult records errors from batch sync.
 type BatchSyncResult struct {
-	Config       Config            `json:"config"`
-	StatusMatrix StatusMatrix      `json:"statusMatrix"`
-	Errors       []BatchSyncError  `json:"errors"`
-	// DegradedCount is the number of skills whose requested link mode
-	// fell back to copy during this batch.
-	DegradedCount int `json:"degradedCount"`
+	Config       Config           `json:"config"`
+	StatusMatrix StatusMatrix     `json:"statusMatrix"`
+	Errors       []BatchSyncError `json:"errors"`
 }
 
 // BatchSyncError records a failed sync in a batch operation.

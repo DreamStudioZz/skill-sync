@@ -1,81 +1,88 @@
+// SkillDock entry point: starts a local HTTP server that serves the
+// server-side rendered UI. There is no WebView2 / Wails dependency — the
+// user opens the app in any browser. A single instance is enforced by
+// holding the HTTP listen port; a second launch simply opens the browser
+// to the already-running instance.
 package main
 
 import (
 	"context"
-	"embed"
 	"fmt"
+	"log"
 	"net"
-	"sync/atomic"
+	"net/http"
+	"os"
+	"os/exec"
+	"os/signal"
+	"runtime"
+	"syscall"
+	"time"
 
-	"github.com/wailsapp/wails/v2"
-	"github.com/wailsapp/wails/v2/pkg/options"
-	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
-	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
+	"skilldock/internal/app"
+	"skilldock/internal/config"
+	"skilldock/internal/server"
 )
 
-//go:embed all:frontend/dist
-var assets embed.FS
-
-// singleInstancePort is used to detect if another instance is already running.
-const singleInstancePort = "127.0.0.1:38291"
-
-// shouldQuit is set to true when the user explicitly quits via the tray menu.
-// When false, closing the window hides it to the tray instead of exiting.
-var shouldQuit atomic.Bool
-
 func main() {
-	// --- Single instance check ---
-	ln, err := net.Listen("tcp", singleInstancePort)
+	port := os.Getenv("SKILLDOCK_PORT")
+	if port == "" {
+		port = "38291"
+	}
+
+	// Single-instance: grabbing the listen port is the lock.
+	ln, err := net.Listen("tcp", "127.0.0.1:"+port)
 	if err != nil {
-		fmt.Println("SkillDock is already running.")
+		openBrowser("http://127.0.0.1:" + port)
+		fmt.Println("SkillDock 已在运行，已为你打开浏览器。")
 		return
 	}
-	defer ln.Close()
 
-	// Create the app
-	app := NewApp()
-
-	// Start the system tray (runs in a goroutine on Windows)
-	startTray(app, func() {
-		// Quit function: flag true so OnBeforeClose allows the close,
-		// then tell Wails to quit.
-		shouldQuit.Store(true)
-		if app.ctx != nil {
-			wailsRuntime.Quit(app.ctx)
-		}
-	})
-
-	// Run the Wails application
-	err = wails.Run(&options.App{
-		Title:     "SkillDock 技能货站",
-		Width:     1280,
-		Height:    860,
-		MinWidth:  900,
-		MinHeight: 600,
-		AssetServer: &assetserver.Options{
-			Assets: assets,
-		},
-		BackgroundColour: &options.RGBA{R: 251, G: 243, B: 228, A: 1},
-		OnStartup:        app.startup,
-		OnShutdown:       app.shutdown,
-		OnBeforeClose: func(ctx context.Context) (prevent bool) {
-			if shouldQuit.Load() {
-				// User explicitly chose to quit — allow the window to close
-				return false
-			}
-			// Minimize to tray instead of closing
-			wailsRuntime.WindowHide(ctx)
-			return true
-		},
-		Bind: []interface{}{
-			app,
-		},
-	})
-
+	application := app.New()
+	srv, err := server.New(application)
 	if err != nil {
-		println("Error:", err.Error())
+		log.Fatalf("初始化失败: %v", err)
 	}
+
+	url := "http://127.0.0.1:" + port
+	if os.Getenv("SKILLDOCK_NO_BROWSER") == "" {
+		go func() {
+			time.Sleep(400 * time.Millisecond)
+			openBrowser(url)
+		}()
+	}
+	fmt.Printf("SkillDock 已启动：%s\n", url)
+
+	httpSrv := &http.Server{Handler: srv.Handler()}
+	go func() {
+		if e := httpSrv.Serve(ln); e != nil && e != http.ErrServerClosed {
+			log.Printf("server error: %v", e)
+		}
+	}()
+
+	waitForExit()
+	application.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	_ = httpSrv.Shutdown(ctx)
 }
 
-// Ensure wailsRuntime is referenced (used in app.go for EventsEmit)
-var _ = wailsRuntime.EventsEmit
+// openBrowser opens the given URL in the system default browser.
+func openBrowser(url string) {
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "windows":
+		cmd = config.HideConsoleWindow(exec.Command("cmd", "/c", "start", "", url))
+	case "darwin":
+		cmd = exec.Command("open", url)
+	default:
+		cmd = exec.Command("xdg-open", url)
+	}
+	_ = cmd.Start()
+}
+
+// waitForExit blocks until the process receives an interrupt/terminate signal.
+func waitForExit() {
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
+	<-sig
+}

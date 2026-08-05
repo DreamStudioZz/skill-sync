@@ -1,0 +1,153 @@
+{{define "statusBadge"}}
+<span class="sd-badge sd-badge-{{.}}">
+  {{if eq . "synced"}}已同步{{else if eq . "stale"}}待更新{{else if eq . "drifted"}}漂移{{else}}未同步{{end}}
+</span>
+{{end}}
+
+{{define "icon"}}<svg class="i" aria-hidden="true"><use href="#icon-{{.}}"></use></svg>{{end}}
+
+{{define "dashboard"}}
+{{if not .Config.Base.Path}}
+  <!-- Welcome -->
+  <div class="sd-page sd-welcome">
+    <div class="sd-welcome-inner">
+      <div class="sd-logo sd-logo-lg">{{template "icon" "box"}}</div>
+      <h1 class="sd-title-lg">欢迎使用 SkillDock</h1>
+      <p class="sd-sub-lg">Base 是仓库，Agent 是港口，Skill 是货。<br/>先指定一个文件夹作为你的 Base 仓库吧。</p>
+      <button class="sd-btn sd-btn-primary" data-action="open-set-base">{{template "icon" "folder"}} 选择 Base 目录</button>
+    </div>
+  </div>
+{{else}}
+  <div class="sd-page">
+    <!-- Header -->
+    <div class="sd-header">
+      <div class="sd-brand">
+        <div class="sd-logo">{{template "icon" "box"}}</div>
+        <div>
+          <h1 class="sd-title">SkillDock 技能货站</h1>
+          <p class="sd-sub">Base 是仓库，Agent 是港口，Skill 是货</p>
+        </div>
+      </div>
+      <div class="sd-header-actions">
+        {{if gt .StaleCount 0}}
+        <button class="sd-btn sd-btn-warn" data-action="open-matrix">{{template "icon" "bell"}} 检测到 {{.StaleCount}} 处更新</button>
+        {{end}}
+        <button class="sd-btn sd-btn-ghost" data-action="open-history">{{template "icon" "history"}} 历史</button>
+        <button class="sd-icon-btn" id="sd-theme-toggle" data-action="toggle-theme" title="切换浅色 / 深色">{{template "icon" "moon"}}</button>
+      </div>
+    </div>
+
+    <div class="sd-grid">
+      <!-- Base panel -->
+      <div class="sd-col-base">
+        <div class="sd-card sd-base-card">
+          <div class="sd-card-head">
+            <div class="sd-card-title">{{template "icon" "store"}} Base 仓库</div>
+            <div class="sd-card-tools">
+              <button class="sd-link-btn" data-action="scan">{{template "icon" "refresh"}} 重新扫描</button>
+              <button class="sd-link-btn" data-action="open-set-base">{{template "icon" "edit"}} 更换</button>
+            </div>
+          </div>
+          <button class="sd-path" data-action="open" data-path="{{.Config.Base.Path}}" title="在文件管理器中打开">
+            {{template "icon" "folder-open"}} <span class="sd-path-text">{{.Config.Base.Path}}</span>
+          </button>
+          <p class="sd-muted sd-small">{{len .Config.Base.Skills}} 个 skill</p>
+        </div>
+
+        <div class="sd-skill-list">
+          {{if eq (len .Config.Base.Skills) 0}}
+          <div class="sd-card sd-empty">
+            <div class="sd-empty-icon">{{template "icon" "box"}}</div>
+            <p class="sd-muted">Base 中暂无 skill</p>
+            <p class="sd-muted sd-small">在 Base 目录下创建含 SKILL.md 的子目录</p>
+          </div>
+          {{else}}
+          {{range .Config.Base.Skills}}
+          <div class="sd-skill-card" data-skill-id="{{.ID}}">
+            <div class="sd-skill-head">
+              <span class="sd-check"></span>
+              <span class="sd-skill-name">{{.Name}}</span>
+              <div class="sd-skill-meta">
+                <button class="sd-icon-btn" data-action="open" data-path="{{$.Config.Base.Path}}/{{.ID}}" title="在文件管理器中打开">{{template "icon" "folder-open"}}</button>
+                <span class="sd-hash">#{{sliceHash .ContentHash}}</span>
+              </div>
+            </div>
+            {{if .Description}}<p class="sd-skill-desc">{{.Description}}</p>{{end}}
+            <p class="sd-muted sd-tiny">最近更新：{{relTime .UpdatedAt}}</p>
+          </div>
+          {{end}}
+          {{end}}
+        </div>
+      </div>
+
+      <!-- Agents grid -->
+      <div class="sd-col-agents">
+        <div class="sd-agents-head">
+          <div class="sd-card-title">{{template "icon" "ship"}} 港口 · Agents</div>
+          <button class="sd-btn sd-btn-primary sd-batch-btn" data-action="batch-sync" style="display:none">{{template "icon" "sync"}} 同步选中 (<span class="sd-batch-count">0</span>→<span class="sd-batch-count-a">0</span>)</button>
+        </div>
+
+        <div class="sd-agents-grid">
+          {{range .Agents}}{{$agent := .}}
+          <div class="sd-card sd-agent-card" data-agent-id="{{.ID}}">
+            <div class="sd-agent-head">
+              <div class="sd-agent-id">
+                <div class="sd-agent-chip" style="background:{{.Color}}22;color:{{.Color}}">{{template "icon" "ship"}}</div>
+                <div>
+                  <p class="sd-agent-name">{{.Name}}</p>
+                  <button class="sd-path sd-path-sm" data-action="open" data-path="{{.Path}}" title="在文件管理器中打开">
+                    <span class="sd-path-text">{{.Path}}</span>
+                  </button>
+                </div>
+              </div>
+              <div class="sd-agent-tools">
+                <span class="sd-mode-badge">{{template "icon" "copy"}} 复制</span>
+                <button class="sd-icon-btn" data-action="open-edit-agent" data-agent-id="{{.ID}}" title="编辑">{{template "icon" "edit"}}</button>
+              </div>
+            </div>
+
+            <div class="sd-summary">
+              {{if gt .Summary.Synced 0}}{{template "statusBadge" "synced"}}{{end}}
+              {{if gt .Summary.Stale 0}}{{template "statusBadge" "stale"}}{{end}}
+              {{if gt .Summary.Drifted 0}}{{template "statusBadge" "drifted"}}{{end}}
+              {{if gt .Summary.NotSynced 0}}<span class="sd-muted sd-small">+{{.Summary.NotSynced}} 未同步</span>{{end}}
+            </div>
+
+            <div class="sd-skill-rows">
+              {{range .Rows}}
+              <div class="sd-skill-row">
+                <span class="sd-row-name" title="{{.Skill.Name}}">{{.Skill.Name}}</span>
+                <div class="sd-row-actions">
+                  {{template "statusBadge" .Status}}
+                  {{if eq .Status "not_synced"}}
+                    <button class="sd-icon-btn sd-act" data-action="sync" data-skill-id="{{.Skill.ID}}" data-agent-id="{{$agent.ID}}" title="同步这个 skill">{{template "icon" "sync"}}</button>
+                  {{else if eq .Status "stale"}}
+                    <button class="sd-icon-btn sd-act" data-action="push" data-skill-id="{{.Skill.ID}}" data-agent-id="{{$agent.ID}}" title="推送更新">{{template "icon" "push"}}</button>
+                  {{else if eq .Status "drifted"}}
+                    <button class="sd-icon-btn sd-act" data-action="open-drift" data-skill-id="{{.Skill.ID}}" data-agent-id="{{$agent.ID}}" title="处理漂移">{{template "icon" "drift"}}</button>
+                  {{else}}
+                    <button class="sd-icon-btn sd-act" data-action="unsync" data-skill-id="{{.Skill.ID}}" data-agent-id="{{$agent.ID}}" title="移除同步">{{template "icon" "trash"}}</button>
+                  {{end}}
+                </div>
+              </div>
+              {{end}}
+            </div>
+
+            <div class="sd-agent-foot">
+              <button class="sd-btn sd-btn-primary sd-flex1" data-action="sync-all" data-agent-id="{{.ID}}">{{template "icon" "sync"}} 全部同步</button>
+              <button class="sd-btn sd-btn-outline" data-action="open-diff" data-agent-id="{{.ID}}" {{if eq .Pending 0}}disabled{{end}}>查看变更</button>
+              <button class="sd-btn sd-btn-ghost sd-select-agent" data-action="toggle-agent" data-agent-id="{{.ID}}">+</button>
+            </div>
+          </div>
+          {{end}}
+
+          <button class="sd-card sd-add-agent" data-action="open-add-agent">
+            <div class="sd-add-plus">{{template "icon" "plus"}}</div>
+            <span class="sd-small">添加一个 Agent</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+{{end}}
+{{end}}

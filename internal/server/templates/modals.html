@@ -1,0 +1,240 @@
+{{define "set-base"}}
+<div class="sd-modal-overlay" data-action="close-modal">
+  <div class="sd-modal" data-stop="1">
+    <div class="sd-modal-head">
+      <h3>{{template "icon" "folder"}} 选择 Base 仓库目录</h3>
+      <button class="sd-icon-btn" data-action="close-modal">{{template "icon" "close"}}</button>
+    </div>
+    <label class="sd-label">手动输入路径</label>
+    <input class="sd-input" id="sd-base-input" placeholder="例如 ~/skills-base 或 /Users/you/skills">
+    <div class="sd-browse-bar">
+      <button class="sd-link-btn" data-browse="">{{template "icon" "home"}} 主目录</button>
+      <span class="sd-browse-path" id="sd-browse-path">~</span>
+    </div>
+    <div class="sd-browse-list" id="sd-browse-list"></div>
+    <div class="sd-modal-foot">
+      <button class="sd-btn sd-btn-ghost" data-action="close-modal">取消</button>
+      <button class="sd-btn sd-btn-primary" data-action="confirm-set-base">{{template "icon" "check"}} 确认</button>
+    </div>
+  </div>
+</div>
+{{end}}
+
+{{define "browse-entries"}}
+<div class="sd-browse-inner" data-path="{{.Path}}">
+  {{if .Parent}}<button class="sd-browse-item sd-browse-up" data-browse="{{.Parent}}">{{template "icon" "chevron-up"}} 上级目录</button>{{end}}
+  {{range .Entries}}
+  <button class="sd-browse-item" data-browse="{{$.Path}}/{{.Name}}">{{template "icon" "folder"}} {{.Name}}</button>
+  {{end}}
+  {{if eq (len .Entries) 0}}<p class="sd-muted sd-small sd-browse-empty">没有子目录</p>{{end}}
+</div>
+{{end}}
+
+{{define "add-agent"}}
+<div class="sd-modal-overlay" data-action="close-modal">
+  <div class="sd-modal" data-stop="1">
+    <div class="sd-modal-head">
+      <h3>{{template "icon" "plus"}} 添加 Agent</h3>
+      <button class="sd-icon-btn" data-action="close-modal">{{template "icon" "close"}}</button>
+    </div>
+
+    <label class="sd-label">快速添加预设</label>
+    <div class="sd-preset-grid">
+      <button class="sd-preset" data-preset="Claude Code" data-path="~/.claude/skills" data-color="#D97757">
+        <span class="sd-agent-chip" style="background:#D9775722;color:#D97757">{{template "icon" "ship"}}</span>
+        <span><b>Claude Code</b><br/><span class="sd-muted sd-tiny">~/.claude/skills</span></span>
+      </button>
+      <button class="sd-preset" data-preset="Codex CLI" data-path="~/.agents/skills" data-color="#3E8EED">
+        <span class="sd-agent-chip" style="background:#3E8EED22;color:#3E8EED">{{template "icon" "ship"}}</span>
+        <span><b>Codex CLI</b><br/><span class="sd-muted sd-tiny">~/.agents/skills</span></span>
+      </button>
+      <button class="sd-preset" data-preset="Gemini CLI" data-path="~/.gemini/skills" data-color="#4E9A51">
+        <span class="sd-agent-chip" style="background:#4E9A5122;color:#4E9A51">{{template "icon" "ship"}}</span>
+        <span><b>Gemini CLI</b><br/><span class="sd-muted sd-tiny">~/.gemini/skills</span></span>
+      </button>
+      <button class="sd-preset" data-preset="Cursor" data-path="~/.cursor/skills" data-color="#A78BFA">
+        <span class="sd-agent-chip" style="background:#A78BFA22;color:#A78BFA">{{template "icon" "ship"}}</span>
+        <span><b>Cursor</b><br/><span class="sd-muted sd-tiny">~/.cursor/skills</span></span>
+      </button>
+    </div>
+
+    <label class="sd-label">名称</label>
+    <input class="sd-input" id="sd-agent-name" placeholder="My Agent">
+    <label class="sd-label">路径</label>
+    <input class="sd-input sd-mono" id="sd-agent-path" placeholder="~/.my-agent/skills">
+    <label class="sd-label">图标颜色</label>
+    <div class="sd-color-row" id="sd-color-row">
+      {{range $c := colors}}
+      <button class="sd-color-dot" style="background:{{$c}}" data-color="{{$c}}"></button>
+      {{end}}
+    </div>
+
+    <div class="sd-modal-foot">
+      <button class="sd-btn sd-btn-ghost" data-action="close-modal">取消</button>
+      <button class="sd-btn sd-btn-primary" data-action="confirm-add-agent">{{template "icon" "check"}} 添加</button>
+    </div>
+  </div>
+</div>
+{{end}}
+
+{{define "edit-agent"}}
+<div class="sd-modal-overlay" data-action="close-modal">
+  <div class="sd-modal" data-stop="1">
+    <div class="sd-modal-head">
+      <h3>{{template "icon" "edit"}} 编辑 Agent</h3>
+      <button class="sd-icon-btn" data-action="close-modal">{{template "icon" "close"}}</button>
+    </div>
+    <input type="hidden" id="sd-edit-id" value="{{.Agent.ID}}">
+    <label class="sd-label">名称</label>
+    <input class="sd-input" id="sd-agent-name" value="{{.Agent.Name}}">
+    <label class="sd-label">路径</label>
+    <input class="sd-input sd-mono" id="sd-agent-path" value="{{.Agent.Path}}">
+
+    <div class="sd-danger-zone">
+      <p class="sd-danger-title">{{template "icon" "trash"}} 删除 Agent</p>
+      <p class="sd-muted sd-small">删除 Agent 只解除托管关系。是否同时清理 SkillDock 曾同步过去的文件？</p>
+      <label class="sd-check-line"><input type="checkbox" id="sd-cleanup"> 同时清理同步文件</label>
+      <div class="sd-modal-foot">
+        <button class="sd-btn sd-btn-ghost" data-action="close-modal">取消</button>
+        <button class="sd-btn sd-btn-danger" data-action="confirm-delete-agent" data-agent-id="{{.Agent.ID}}">{{template "icon" "trash"}} 确认删除</button>
+      </div>
+    </div>
+  </div>
+</div>
+{{end}}
+
+{{define "diff"}}
+<div class="sd-modal-overlay" data-action="close-modal">
+  <div class="sd-modal" data-stop="1">
+    <div class="sd-modal-head">
+      <h3>{{template "icon" "bell"}} {{.Agent.Name}} 的待处理变更</h3>
+      <button class="sd-icon-btn" data-action="close-modal">{{template "icon" "close"}}</button>
+    </div>
+    {{if eq (len .Rows) 0}}
+    <p class="sd-muted sd-center sd-py">没有待处理的变更 🎉</p>
+    {{else}}
+    <div class="sd-diff-list">
+      {{range .Rows}}
+      <label class="sd-diff-item">
+        <input type="checkbox" class="sd-diff-check" data-skill-id="{{.Skill.ID}}" data-status="{{.Status}}">
+        <div>
+          <p class="sd-skill-name">{{.Skill.Name}}</p>
+          <p class="sd-muted sd-tiny">{{if eq .Status "stale"}}Base 有新版本，待推送{{else if eq .Status "drifted"}}Agent 端有手动修改，需处理漂移{{else}}尚未投递到该 Agent{{end}}</p>
+        </div>
+        {{template "statusBadge" .Status}}
+      </label>
+      {{end}}
+    </div>
+    <div class="sd-modal-foot">
+      <button class="sd-btn sd-btn-ghost" data-action="close-modal">取消</button>
+      <button class="sd-btn sd-btn-primary" data-action="apply-diff" data-agent-id="{{.Agent.ID}}">{{template "icon" "check"}} 应用选中变更</button>
+    </div>
+    {{end}}
+  </div>
+</div>
+{{end}}
+
+{{define "drift"}}
+<div class="sd-modal-overlay" data-action="close-modal">
+  <div class="sd-modal" data-stop="1">
+    <div class="sd-modal-head">
+      <h3>{{template "icon" "drift"}} 检测到漂移</h3>
+      <button class="sd-icon-btn" data-action="close-modal">{{template "icon" "close"}}</button>
+    </div>
+    <div class="sd-danger-soft">
+      <p class="sd-skill-name">「{{.SkillName}}」在 {{.AgentName}} 中被手动修改过</p>
+      <p class="sd-muted sd-small">Agent 端文件内容与上次同步记录不一致，请选择处理方式：</p>
+    </div>
+    <div class="sd-drift-opts" id="sd-drift-opts">
+      <button class="sd-drift-opt" data-drift="keep"><b>保留 Agent 端修改</b><span class="sd-muted sd-tiny">跳过本次同步，标记为漂移，等待后续处理</span></button>
+      <button class="sd-drift-opt" data-drift="overwrite"><b>覆盖为 Base 版本</b><span class="sd-muted sd-tiny">放弃 Agent 端的修改，用 Base 版本替换</span></button>
+      <button class="sd-drift-opt" data-drift="save_as_new"><b>另存为新 skill 到 Base</b><span class="sd-muted sd-tiny">把 Agent 端的修改导入 Base 作为独立 skill</span></button>
+    </div>
+    <div id="sd-newname-wrap" style="display:none">
+      <label class="sd-label">新 skill 名称</label>
+      <input class="sd-input sd-mono" id="sd-newname" value="{{.SkillID}}-variant">
+    </div>
+    <div class="sd-modal-foot">
+      <button class="sd-btn sd-btn-ghost" data-action="close-modal">取消</button>
+      <button class="sd-btn sd-btn-primary" data-action="confirm-drift" data-skill-id="{{.SkillID}}" data-agent-id="{{.AgentID}}">{{template "icon" "check"}} 确认处理</button>
+    </div>
+  </div>
+</div>
+{{end}}
+
+{{define "history"}}
+<div class="sd-modal-overlay" data-action="close-modal">
+  <div class="sd-modal" data-stop="1">
+    <div class="sd-modal-head">
+      <h3>{{template "icon" "history"}} 操作历史</h3>
+      <button class="sd-icon-btn" data-action="close-modal">{{template "icon" "close"}}</button>
+    </div>
+    {{if eq (len .History) 0}}
+    <p class="sd-muted sd-center sd-py">暂无操作历史</p>
+    {{else}}
+    <div class="sd-history-list">
+      {{range .History}}
+      <div class="sd-history-item">
+        <div class="sd-history-icon">{{template "icon" "box"}}</div>
+        <div class="sd-history-body">
+          <div class="sd-history-line">
+            <span class="sd-skill-name">{{historyLabel .Action}}</span>
+            <span class="sd-muted sd-tiny">·</span>
+            <span class="sd-tiny">{{.SkillName}}</span>
+            <span class="sd-muted sd-tiny">→</span>
+            <span class="sd-tiny sd-muted">{{.AgentName}}</span>
+          </div>
+          <p class="sd-muted sd-tiny">{{relTime .Timestamp}} · {{if eq .Mode "link"}}链接{{else}}复制{{end}}</p>
+        </div>
+        {{if historyRollback .Action}}
+        <button class="sd-btn sd-btn-outline sd-tiny-btn" data-action="rollback" data-history-id="{{.ID}}">{{template "icon" "rollback"}} 回滚</button>
+        {{end}}
+      </div>
+      {{end}}
+    </div>
+    {{end}}
+  </div>
+</div>
+{{end}}
+
+{{define "matrix"}}
+<div class="sd-modal-overlay" data-action="close-modal">
+  <div class="sd-modal wide" data-stop="1">
+    <div class="sd-modal-head">
+      <h3>{{template "icon" "grid"}} 状态总览 · 矩阵视图</h3>
+      <button class="sd-icon-btn" data-action="close-modal">{{template "icon" "close"}}</button>
+    </div>
+    {{if eq (len .Config.Base.Skills) 0}}
+    <p class="sd-muted sd-center sd-py">Base 中没有 skill</p>
+    {{else}}
+    <div class="sd-matrix-wrap">
+      <table class="sd-matrix">
+        <thead>
+          <tr><th class="sd-matrix-skill">Skill</th>{{range .Agents}}<th>{{.Name}}</th>{{end}}</tr>
+        </thead>
+        <tbody>
+          {{$matrix := .Matrix}}
+          {{range .Config.Base.Skills}}
+          <tr>
+            <td class="sd-matrix-skill">{{.Name}}</td>
+            {{range $agent := $.Agents}}
+              {{$st := index (index $matrix $agent.ID) .ID}}
+              <td class="sd-matrix-cell">
+                {{template "statusBadge" $st}}
+                {{if or (eq $st "stale") (eq $st "not_synced") (eq $st "")}}
+                <input type="checkbox" class="sd-matrix-check" data-key="{{$agent.ID}}||{{.ID}}" data-status="{{$st}}">
+                {{end}}
+              </td>
+            {{end}}
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+    </div>
+    <div class="sd-modal-foot" id="sd-matrix-foot" style="display:none">
+      <button class="sd-btn sd-btn-primary" data-action="apply-matrix">{{template "icon" "sync"}} 应用选中变更</button>
+    </div>
+    {{end}}
+  </div>
+</div>
+{{end}}
