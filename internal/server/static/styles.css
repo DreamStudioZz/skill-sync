@@ -7,19 +7,19 @@
   --el-color-danger: #F56C6C;
   --el-color-info: #909399;
 
-  --el-text-primary: #303133;
-  --el-text-regular: #606266;
-  --el-text-secondary: #909399;
-  --el-text-placeholder: #A8ABB2;
+  --el-text-primary: #1F2329;
+  --el-text-regular: #4E5969;
+  --el-text-secondary: #6B7280;
+  --el-text-placeholder: #9CA3AF;
 
-  --el-border-color: #DCDFE6;
-  --el-border-light: #E4E7ED;
-  --el-border-lighter: #EBEEF5;
-  --el-border-extra-light: #F2F6FC;
+  --el-border-color: #E5E7EB;
+  --el-border-light: #EAECEF;
+  --el-border-lighter: #F0F0F2;
+  --el-border-extra-light: #EEF0F2;
 
-  --el-bg-page: #F5F7FA;
+  --el-bg-page: #F5F6F8;
   --el-bg-card: #FFFFFF;
-  --el-bg-fill: #F0F2F5;
+  --el-bg-fill: #F3F4F6;
 
   --el-radius: 4px;
   --el-radius-lg: 8px;
@@ -447,3 +447,112 @@ body {
 [data-theme="dark"] .sd-skill-card:hover { background: #1F1F1F; }
 [data-theme="dark"] .sd-skill-card.is-selected { background: var(--el-hover-fill); }
 .sd-mode-badge .i { width: 13px; height: 13px; }
+
+/* ===================================================================
+   Light theme polish (GitHub Desktop / Linear style):
+   separate surfaces with background layers + soft shadows, NOT borders.
+   Dark theme (above) is intentionally left untouched.
+   =================================================================== */
+html:not([data-theme="dark"]) {
+
+  /* ---- Big surfaces: gray canvas, white cards float on shadow ---- */
+  .sd-card { border-color: transparent; box-shadow: 0 1px 2px rgba(16, 24, 40, .06), 0 6px 16px rgba(16, 24, 40, .05); }
+
+  .sd-agent-card {
+    border: 1px solid transparent;
+    box-shadow: 0 1px 3px rgba(16, 24, 40, .06), 0 6px 18px rgba(16, 24, 40, .06);
+  }
+  .sd-agent-card:hover { box-shadow: 0 8px 24px rgba(16, 24, 40, .12); }
+
+  .sd-skill-card {
+    border: 1px solid transparent;
+    box-shadow: 0 1px 2px rgba(16, 24, 40, .06), 0 4px 12px rgba(16, 24, 40, .04);
+  }
+  .sd-skill-card:hover {
+    background: #F5F9FF;
+    border-color: var(--el-color-primary);
+    box-shadow: 0 6px 16px rgba(64, 158, 255, .20);
+    transform: translateY(-1px);
+  }
+  .sd-skill-card.is-selected {
+    background: #F5F9FF;
+    border-color: var(--el-color-primary);
+    box-shadow: 0 0 0 1px var(--el-color-primary) inset;
+  }
+
+  .sd-base-card {
+    background: var(--el-bg-fill);
+    box-shadow: 0 1px 2px rgba(16, 24, 40, .05), 0 4px 10px rgba(16, 24, 40, .04);
+  }
+
+  .sd-add-agent {
+    border: 1px dashed var(--el-border-color);
+    background: #FBFBFC;
+  }
+  .sd-add-agent:hover {
+    border-color: var(--el-color-primary);
+    background: #F5F9FF;
+    box-shadow: 0 4px 14px rgba(64, 158, 255, .14);
+  }
+
+  /* ---- Modal: float higher, softer corners ---- */
+  .sd-modal {
+    border-radius: 14px;
+    box-shadow: 0 24px 60px rgba(16, 24, 40, .20), 0 8px 24px rgba(16, 24, 40, .12);
+  }
+  .sd-modal.wide { border-radius: 14px; }
+
+  /* ---- Modal inner rows: gray fill instead of boxed borders ---- */
+  .sd-detail-sync-row { border: none; background: var(--el-bg-fill); }
+  .sd-detail-sync-h { color: var(--el-text-placeholder); }
+
+  /* ---- Chips / badges: drop the border, lean on fill ---- */
+  .sd-skill-sync {
+    border: none;
+    background: var(--el-bg-fill);
+    box-shadow: 0 1px 2px rgba(16, 24, 40, .05);
+  }
+  .sd-skill-sync:hover {
+    background: #F5F9FF;
+    color: var(--el-color-primary);
+    box-shadow: 0 2px 6px rgba(64, 158, 255, .18);
+  }
+  .sd-skill-sync.is-full { background: rgba(103, 194, 58, .12); color: var(--el-color-success); }
+  .sd-skill-sync.is-empty { background: var(--el-bg-fill); }
+
+  .sd-tag { border: none; background: var(--el-bg-fill); }
+  .sd-tag-pill { border: none; background: var(--el-bg-fill); }
+  .sd-tag-pill.is-on { background: var(--el-color-primary); }
+
+  .sd-mode-badge { border: none; background: var(--el-bg-fill); }
+  .sd-focus-line { border: none; background: var(--el-bg-fill); }
+  .sd-history-icon { border: none; }
+
+  /* ---- Neutral button: filled soft-gray, not transparent ---- */
+  .sd-btn {
+    background: var(--el-bg-fill);
+    border-color: transparent;
+    color: var(--el-text-regular);
+  }
+  .sd-btn:hover {
+    background: #E9EBEF;
+    border-color: transparent;
+    color: var(--el-text-primary);
+  }
+  .sd-btn-outline {
+    background: var(--el-bg-fill);
+    color: var(--el-color-primary);
+    border-color: transparent;
+  }
+  .sd-btn-outline:hover { background: #F5F9FF; }
+
+  /* ---- History / diff / drift / preset inner cards: drop borders ---- */
+  .sd-history-item { border: none; box-shadow: 0 1px 2px rgba(16, 24, 40, .05); }
+  .sd-diff-item { border: none; background: var(--el-bg-fill); }
+  .sd-drift-opt { border: none; background: var(--el-bg-fill); }
+  .sd-drift-opt.is-on { border: 2px solid var(--el-color-primary); }
+  .sd-preset { border: none; background: var(--el-bg-fill); }
+
+  /* ---- Toast: shadow only ---- */
+  .sd-toast { border: none; }
+}
