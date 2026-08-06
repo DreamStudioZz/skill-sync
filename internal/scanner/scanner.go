@@ -16,7 +16,17 @@ import (
 
 var frontmatterRe = regexp.MustCompile(`(?s)^---\r?\n(.*?)\r?\n---`)
 
+// blockScalarIndicators are the YAML block scalar markers (folded `>` and
+// literal `|`, with optional chomping/clip indicators like `>-`, `|+`).
+var blockScalarIndicators = map[string]bool{
+	">": true, "|": true,
+	">-": true, ">+": true,
+	"|-": true, "|+": true,
+}
+
 // parseFrontmatter extracts YAML frontmatter key: value pairs from markdown.
+// It supports plain scalars, quoted scalars, and YAML block scalars
+// (`>` folded, `|` literal, with optional chomping indicators).
 func parseFrontmatter(content string) (map[string]string, string) {
 	match := frontmatterRe.FindStringSubmatch(content)
 	if match == nil {
@@ -24,17 +34,128 @@ func parseFrontmatter(content string) (map[string]string, string) {
 	}
 	yaml := match[1]
 	data := map[string]string{}
-	for _, line := range strings.Split(yaml, "\n") {
-		idx := strings.Index(line, ":")
-		if idx > 0 {
-			key := strings.TrimSpace(line[:idx])
-			val := strings.TrimSpace(line[idx+1:])
-			// strip surrounding quotes
-			val = strings.Trim(val, "\"'")
-			data[key] = val
+	lines := strings.Split(yaml, "\n")
+	for i := 0; i < len(lines); {
+		line := lines[i]
+		if strings.TrimSpace(line) == "" {
+			i++
+			continue
 		}
+		idx := strings.Index(line, ":")
+		if idx <= 0 {
+			i++
+			continue
+		}
+		key := strings.TrimSpace(line[:idx])
+		val := strings.TrimSpace(line[idx+1:])
+
+		// Block sequence: a key with empty value followed by "- item" lines.
+		if val == "" && i+1 < len(lines) {
+			nxt := strings.TrimSpace(lines[i+1])
+			if strings.HasPrefix(nxt, "- ") {
+				keyIndent := len(line) - len(strings.TrimLeft(line, " \t"))
+				i++
+				var items []string
+				for i < len(lines) {
+					bl := lines[i]
+					if strings.TrimSpace(bl) == "" {
+						i++
+						continue
+					}
+					if len(bl)-len(strings.TrimLeft(bl, " \t")) <= keyIndent {
+						break
+					}
+					t := strings.TrimSpace(bl)
+					if strings.HasPrefix(t, "- ") {
+						items = append(items, strings.TrimSpace(t[2:]))
+						i++
+						continue
+					}
+					break // not a list item
+				}
+				data[key] = strings.Join(items, ", ")
+				continue
+			}
+		}
+
+		// Block scalar: collect following indented lines.
+		if blockScalarIndicators[val] {
+			keyIndent := len(line) - len(strings.TrimLeft(line, " \t"))
+			keepTrailing := strings.Contains(val, "+")
+			i++
+			var block []string
+			for i < len(lines) {
+				bl := lines[i]
+				if strings.TrimSpace(bl) == "" {
+					block = append(block, "") // paragraph break
+					i++
+					continue
+				}
+				if len(bl)-len(strings.TrimLeft(bl, " \t")) <= keyIndent {
+					break // same-or-less indent => next key
+				}
+				block = append(block, strings.TrimSpace(bl))
+				i++
+			}
+			// strip trailing blank lines unless chomping is "keep" (+)
+			if !keepTrailing {
+				for len(block) > 0 && block[len(block)-1] == "" {
+					block = block[:len(block)-1]
+				}
+			}
+			if strings.HasPrefix(val, "|") {
+				data[key] = strings.Join(block, "\n")
+			} else {
+				// folded: join consecutive non-empty lines with a space,
+				// blank lines become newlines.
+				var sb strings.Builder
+				for j, b := range block {
+					if b == "" {
+						if sb.Len() > 0 {
+							sb.WriteByte('\n')
+						}
+						continue
+					}
+					if j > 0 && block[j-1] != "" {
+						sb.WriteByte(' ')
+					}
+					sb.WriteString(b)
+				}
+				data[key] = sb.String()
+			}
+			continue
+		}
+
+		// strip surrounding quotes
+		val = strings.Trim(val, "\"'")
+		data[key] = val
+		i++
 	}
 	return data, content[len(match[0]):]
+}
+
+// parseTagList normalizes a tags value (comma string, inline "[a, b]", or an
+// already comma-joined YAML block sequence) into a clean, de-duplicated list.
+func parseTagList(raw string) []string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+	if strings.HasPrefix(raw, "[") && strings.HasSuffix(raw, "]") {
+		raw = strings.TrimSpace(raw[1 : len(raw)-1])
+	}
+	parts := strings.Split(raw, ",")
+	var out []string
+	seen := map[string]bool{}
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p == "" || seen[p] {
+			continue
+		}
+		seen[p] = true
+		out = append(out, p)
+	}
+	return out
 }
 
 // getAllFiles recursively collects all file paths under dir.
@@ -143,6 +264,7 @@ func ScanBase(basePath string) []models.Skill {
 			ID:          entry.Name(),
 			Name:        name,
 			Description: desc,
+			Tags:        parseTagList(fm["tags"]),
 			ContentHash: hash,
 			UpdatedAt:   updatedAt,
 		})

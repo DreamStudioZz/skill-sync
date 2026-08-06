@@ -9,6 +9,8 @@
   var selectedAgents = new Set();
   var selectedColor = "#D97757";
   var selectedDrift = null;
+  var skillQuery = "";
+  var activeTag = "";
   var toastTimer = null;
 
   // ---- theme (light / dark) ----
@@ -70,8 +72,72 @@
       var b = qs('.sd-select-agent[data-agent-id="' + id + '"]');
       if (b) { b.classList.add("is-on"); b.textContent = "✓"; }
     });
+    wireSkillSearch();
+    buildTagFilter();
     updateBatchBtn();
     updateThemeIcon();
+  }
+
+  // ---- skill list search (name + description) + tag filter ----
+  function applySkillFilter() {
+    var q = skillQuery.trim().toLowerCase();
+    var tag = activeTag;
+    var total = 0, shown = 0;
+    qsa(".sd-skill-card").forEach(function (c) {
+      total++;
+      var matchQ = true, matchT = true;
+      if (q) {
+        var name = (c.getAttribute("data-name") || "").toLowerCase();
+        var desc = (c.getAttribute("data-desc") || "").toLowerCase();
+        matchQ = name.indexOf(q) >= 0 || desc.indexOf(q) >= 0;
+      }
+      if (tag) {
+        var tags = (c.getAttribute("data-tags") || "").split(",");
+        matchT = tags.indexOf(tag) >= 0;
+      }
+      if (matchQ && matchT) { c.classList.remove("sd-skill-hidden"); shown++; }
+      else c.classList.add("sd-skill-hidden");
+    });
+    var cnt = qs("#sd-skill-count");
+    if (cnt) cnt.textContent = (q || tag) && shown !== total ? (shown + " / " + total) : total;
+  }
+
+  // Build the tag filter pills from the currently rendered skills.
+  function buildTagFilter() {
+    var bar = qs("#sd-tag-filter");
+    if (!bar) return;
+    var tags = {};
+    qsa(".sd-skill-card").forEach(function (c) {
+      (c.getAttribute("data-tags") || "").split(",").forEach(function (t) {
+        t = t.trim();
+        if (t) tags[t] = true;
+      });
+    });
+    var keys = Object.keys(tags).sort();
+    if (keys.length === 0) { bar.innerHTML = ""; return; }
+    var html = '<button class="sd-tag-pill' + (activeTag === "" ? " is-on" : "") + '" data-tag="">全部</button>';
+    keys.forEach(function (t) {
+      html += '<button class="sd-tag-pill' + (activeTag === t ? " is-on" : "") + '" data-tag="' + t + '">' + t + "</button>";
+    });
+    bar.innerHTML = html;
+    qsa(".sd-tag-pill", bar).forEach(function (b) {
+      b.addEventListener("click", function () {
+        activeTag = b.getAttribute("data-tag") || "";
+        applySkillFilter();
+        qsa(".sd-tag-pill", bar).forEach(function (x) { x.classList.remove("is-on"); });
+        b.classList.add("is-on");
+      });
+    });
+  }
+
+  function wireSkillSearch() {
+    var sb = qs("#sd-skill-search");
+    if (!sb) return;
+    sb.value = skillQuery;
+    sb.addEventListener("input", function () {
+      skillQuery = sb.value;
+      applySkillFilter();
+    });
   }
 
   function updateBatchBtn() {

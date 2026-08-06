@@ -44,16 +44,21 @@
           <div class="sd-card-head">
             <div class="sd-card-title">{{template "icon" "store"}} Base 仓库</div>
             <div class="sd-card-tools">
-              <button class="sd-link-btn" data-action="scan">{{template "icon" "refresh"}} 重新扫描</button>
               <button class="sd-link-btn" data-action="open-set-base">{{template "icon" "edit"}} 更换</button>
             </div>
           </div>
           <button class="sd-path" data-action="open" data-path="{{.Config.Base.Path}}" title="在文件管理器中打开">
             {{template "icon" "folder-open"}} <span class="sd-path-text">{{.Config.Base.Path}}</span>
           </button>
-          <p class="sd-muted sd-small">{{len .Config.Base.Skills}} 个 skill</p>
+          <p class="sd-muted sd-tiny">{{len .Config.Base.Skills}} Skills</p>
         </div>
 
+        <div class="sd-skill-search">
+          <input class="sd-input sd-input-sm sd-skill-search-input" id="sd-skill-search" type="text" placeholder="搜索 Skill…">
+          <span class="sd-skill-search-ico">{{template "icon" "search"}}</span>
+        </div>
+        <div class="sd-section-label">Skill (<span id="sd-skill-count">{{len .Config.Base.Skills}}</span>)</div>
+        <div class="sd-tag-filter" id="sd-tag-filter"></div>
         <div class="sd-skill-list">
           {{if eq (len .Config.Base.Skills) 0}}
           <div class="sd-card sd-empty">
@@ -63,7 +68,7 @@
           </div>
           {{else}}
           {{range .Config.Base.Skills}}
-          <div class="sd-skill-card" data-skill-id="{{.ID}}">
+          <div class="sd-skill-card" data-skill-id="{{.ID}}" data-name="{{.Name}}" data-desc="{{.Description}}" data-tags="{{join .Tags ","}}">
             <div class="sd-skill-head">
               <span class="sd-check"></span>
               <span class="sd-skill-name">{{.Name}}</span>
@@ -73,7 +78,8 @@
               </div>
             </div>
             {{if .Description}}<p class="sd-skill-desc">{{.Description}}</p>{{end}}
-            <p class="sd-muted sd-tiny">最近更新：{{relTime .UpdatedAt}}</p>
+            {{if .Tags}}<div class="sd-skill-tags">{{range .Tags}}<span class="sd-tag">{{.}}</span>{{end}}</div>{{end}}
+            <p class="sd-skill-time">{{template "icon" "clock"}} {{relTime .UpdatedAt}}</p>
           </div>
           {{end}}
           {{end}}
@@ -84,7 +90,10 @@
       <div class="sd-col-agents">
         <div class="sd-agents-head">
           <div class="sd-card-title">{{template "icon" "ship"}} 港口 · Agents</div>
-          <button class="sd-btn sd-btn-primary sd-batch-btn" data-action="batch-sync" style="display:none">{{template "icon" "sync"}} 同步选中 (<span class="sd-batch-count">0</span>→<span class="sd-batch-count-a">0</span>)</button>
+          <div class="sd-agents-head-actions">
+            <button class="sd-btn sd-btn-primary sd-btn-sm" data-action="open-add-agent">{{template "icon" "plus"}} 添加 Agent</button>
+            <button class="sd-btn sd-btn-primary sd-batch-btn" data-action="batch-sync" style="display:none">{{template "icon" "sync"}} 同步选中 (<span class="sd-batch-count">0</span>→<span class="sd-batch-count-a">0</span>)</button>
+          </div>
         </div>
 
         <div class="sd-agents-grid">
@@ -101,7 +110,7 @@
                 </div>
               </div>
               <div class="sd-agent-tools">
-                <span class="sd-mode-badge">{{if eq .DefaultMode "link"}}{{template "icon" "link"}} 链接{{else}}{{template "icon" "copy"}} 复制{{end}}</span>
+                <span class="sd-mode-badge" title="{{if eq .DefaultMode "link"}}链接模式{{else}}复制模式{{end}}">{{if eq .DefaultMode "link"}}{{template "icon" "link"}}{{else}}{{template "icon" "copy"}}{{end}}</span>
                 <button class="sd-icon-btn" data-action="open-edit-agent" data-agent-id="{{.ID}}" title="编辑">{{template "icon" "edit"}}</button>
               </div>
             </div>

@@ -2,11 +2,12 @@ package models
 
 // Skill represents a skill directory in the Base warehouse.
 type Skill struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	ContentHash string `json:"contentHash"`
-	UpdatedAt   string `json:"updatedAt"`
+	ID          string   `json:"id"`
+	Name        string   `json:"name"`
+	Description string   `json:"description"`
+	Tags        []string `json:"tags"`
+	ContentHash string   `json:"contentHash"`
+	UpdatedAt   string   `json:"updatedAt"`
 }
 
 // Link records the sync state of a skill in an agent directory.

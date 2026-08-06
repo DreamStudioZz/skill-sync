@@ -37,6 +37,7 @@ func New(a *app.App) (*Server, error) {
 	funcMap := template.FuncMap{
 		"relTime":         formatRelative,
 		"sliceHash":       sliceHash,
+		"join":            strings.Join,
 		"colors":          agentColors,
 		"historyLabel":    historyLabel,
 		"historyRollback": historyRollback,
