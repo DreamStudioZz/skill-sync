@@ -79,7 +79,12 @@
             </div>
             {{if .Description}}<p class="sd-skill-desc">{{.Description}}</p>{{end}}
             {{if .Tags}}<div class="sd-skill-tags">{{range .Tags}}<span class="sd-tag">{{.}}</span>{{end}}</div>{{end}}
-            <p class="sd-skill-time">{{template "icon" "clock"}} {{relTime .UpdatedAt}}</p>
+            <div class="sd-skill-foot">
+              <span class="sd-skill-time" data-abs="{{absTime .UpdatedAt}}">{{template "icon" "clock"}} {{relTime .UpdatedAt}}</span>
+              <button class="sd-skill-sync" data-action="focus-skill" data-skill-id="{{.ID}}" title="查看同步状态">
+                <span class="sd-sync-count"></span><span class="sd-sync-mark"></span>
+              </button>
+            </div>
           </div>
           {{end}}
           {{end}}
@@ -95,6 +100,8 @@
             <button class="sd-btn sd-btn-primary sd-batch-btn" data-action="batch-sync" style="display:none">{{template "icon" "sync"}} 同步选中 (<span class="sd-batch-count">0</span>→<span class="sd-batch-count-a">0</span>)</button>
           </div>
         </div>
+
+        <div class="sd-focus-banner" id="sd-focus-banner" style="display:none"></div>
 
         <div class="sd-agents-grid">
           {{range .Agents}}{{$agent := .}}
@@ -124,7 +131,7 @@
 
             <div class="sd-skill-rows">
               {{range .Rows}}
-              <div class="sd-skill-row">
+              <div class="sd-skill-row" data-skill-id="{{.Skill.ID}}" data-status="{{.Status}}">
                 <span class="sd-row-name" title="{{.Skill.Name}}">{{.Skill.Name}}</span>
                 <div class="sd-row-actions">
                   {{template "statusBadge" .Status}}

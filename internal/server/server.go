@@ -36,6 +36,7 @@ type Server struct {
 func New(a *app.App) (*Server, error) {
 	funcMap := template.FuncMap{
 		"relTime":         formatRelative,
+		"absTime":         formatAbsolute,
 		"sliceHash":       sliceHash,
 		"join":            strings.Join,
 		"colors":          agentColors,
@@ -77,6 +78,19 @@ func formatRelative(iso string) string {
 		return fmt.Sprintf("%d 天前", day)
 	}
 	return t.Format("2006-01-02")
+}
+
+// formatAbsolute renders an ISO timestamp as a fixed "2006-01-02 15:04" string,
+// used as the absolute companion to the relative label.
+func formatAbsolute(iso string) string {
+	if iso == "" {
+		return ""
+	}
+	t, err := time.Parse(time.RFC3339, iso)
+	if err != nil {
+		return iso
+	}
+	return t.Format("2006-01-02 15:04")
 }
 
 // sliceHash returns the last 6 characters of a content hash for display.

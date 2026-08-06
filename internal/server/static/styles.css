@@ -234,11 +234,100 @@ body {
 .sd-add-plus { display: flex; align-items: center; justify-content: center; }
 .sd-add-plus .i { width: 26px; height: 26px; }
 
+/* Skill focus (skill-centric sync view) */
+.sd-skill-card.is-focused { border-color: var(--el-color-primary); background: var(--el-hover-fill); box-shadow: 0 0 0 1px var(--el-color-primary) inset, 0 2px 8px rgba(64, 158, 255, .14); }
+.sd-skill-row.is-focus { background: var(--el-hover-fill); border-radius: var(--el-radius); box-shadow: inset 2px 0 0 var(--el-color-primary); }
+.sd-skill-row.is-dim { opacity: .32; }
+.sd-agent-card.has-focus-skill { border-color: var(--el-color-primary); }
+.sd-agent-card.no-focus-skill { opacity: .6; }
+.sd-focus-banner { background: rgba(64, 158, 255, .08); border: 1px solid rgba(64, 158, 255, .28); border-radius: var(--el-radius-lg); padding: 12px 14px; margin-bottom: 14px; }
+[data-theme="dark"] .sd-focus-banner { background: rgba(64, 158, 255, .12); border-color: rgba(64, 158, 255, .40); }
+.sd-focus-head { display: flex; align-items: center; gap: 8px; }
+.sd-focus-head b { color: var(--el-text-primary); font-size: 14px; }
+.sd-focus-head .sd-focus-clear { margin-left: auto; cursor: pointer; color: var(--el-text-placeholder); }
+.sd-focus-head .sd-focus-clear:hover { color: var(--el-color-primary); }
+.sd-focus-list { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 6px; }
+.sd-focus-line { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; padding: 3px 9px; border-radius: var(--el-radius); background: var(--el-bg-card); border: 1px solid var(--el-border-lighter); }
+.sd-focus-line .sd-focus-mark { font-weight: 700; }
+.sd-focus-line.is-on { color: var(--el-color-success); border-color: rgba(103, 194, 58, .4); background: rgba(103, 194, 58, .12); }
+.sd-focus-line.is-off { color: var(--el-text-placeholder); }
+[data-theme="dark"] .sd-focus-line.is-on { background: rgba(103, 194, 58, .12); }
+
+/* Skill foot: updated time (left) + dedicated sync entry (right) */
+.sd-skill-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 5px; }
+.sd-skill-foot .sd-skill-time { margin: 0; }
+.sd-skill-sync { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 700; line-height: 1; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--el-border-color); background: var(--el-bg-card); color: var(--el-text-regular); cursor: pointer; font-family: inherit; transition: all .12s; flex-shrink: 0; box-shadow: 0 1px 2px rgba(0,0,0,.04); }
+.sd-skill-sync:hover { border-color: var(--el-color-primary); color: var(--el-color-primary); background: var(--el-hover-fill); box-shadow: 0 2px 6px rgba(64, 158, 255, .18); }
+.sd-skill-sync .sd-sync-mark { font-weight: 800; }
+.sd-skill-sync .sd-sync-mark.on { color: var(--el-color-success); }
+.sd-skill-sync .sd-sync-mark.off { color: var(--el-color-danger); }
+.sd-skill-sync.is-full { border-color: rgba(103, 194, 58, .5); color: var(--el-color-success); background: rgba(103, 194, 58, .12); box-shadow: none; }
+.sd-skill-sync.is-empty { opacity: .6; cursor: default; box-shadow: none; }
+.sd-skill-sync.is-empty:hover { border-color: var(--el-border-color); color: var(--el-text-secondary); background: var(--el-bg-card); }
+
+/* Sync hover popover */
+.sd-sync-pop { position: absolute; z-index: 40; background: var(--el-bg-card); border: 1px solid var(--el-border-color); border-radius: var(--el-radius); box-shadow: 0 8px 24px rgba(0, 0, 0, .14); padding: 8px 10px; min-width: 160px; font-size: 12px; }
+.sd-sync-pop-head { font-weight: 600; color: var(--el-text-primary); margin-bottom: 6px; }
+.sd-sync-pop-group { font-size: 10px; letter-spacing: .04em; color: var(--el-text-placeholder); margin: 6px 0 2px; text-transform: uppercase; }
+.sd-sync-pop-group:first-of-type { margin-top: 0; }
+.sd-sync-pop-line { display: flex; align-items: center; gap: 6px; padding: 2px 0; color: var(--el-text-regular); }
+.sd-sync-pop-line.on { color: var(--el-color-success); }
+.sd-sync-pop-line.off { color: var(--el-text-placeholder); }
+
+/* Skill detail modal */
+.sd-detail-actions { margin-bottom: 4px; }
+.sd-detail-desc { color: var(--el-text-secondary); font-size: 13px; line-height: 1.5; margin: 0 0 4px; white-space: pre-wrap; word-break: break-word; }
+.sd-detail-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 16px; margin-bottom: 4px; }
+.sd-detail-field { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.sd-detail-field-label { font-size: 11px; color: var(--el-text-placeholder); }
+.sd-detail-field-val { font-size: 12px; color: var(--el-text-regular); display: flex; align-items: center; gap: 4px; }
+.sd-detail-field-val .i { width: 12px; height: 12px; }
+.sd-detail-sync { display: flex; flex-direction: column; gap: 4px; }
+.sd-sync-progress { height: 6px; background: var(--el-bg-fill); border-radius: 999px; overflow: hidden; flex: 1; }
+.sd-sync-bar { height: 100%; background: var(--el-color-primary); border-radius: 999px; transition: width .25s ease; }
+.sd-sync-progress-wrap { display: flex; align-items: center; gap: 10px; cursor: pointer; padding: 2px 2px; border-radius: var(--el-radius); margin-bottom: 8px; }
+.sd-sync-progress-wrap:hover { background: var(--el-hover-fill); }
+.sd-sync-count-txt { font-size: 12px; font-weight: 600; color: var(--el-text-regular); white-space: nowrap; }
+.sd-sync-chevron { color: var(--el-text-placeholder); display: inline-flex; transition: transform .18s ease; }
+.sd-sync-chevron .i { width: 16px; height: 16px; }
+.sd-sync-chevron.is-rot { transform: rotate(-90deg); }
+.sd-detail-sync-table.is-collapsed { display: none; }
+.sd-detail-sync-table { display: flex; flex-direction: column; }
+.sd-detail-sync-h { display: grid; grid-template-columns: 1fr 92px 40px; align-items: center; gap: 8px; font-size: 11px; color: var(--el-text-placeholder); padding: 0 8px 6px; border-bottom: 1px solid var(--el-border-lighter); letter-spacing: .02em; }
+.sd-detail-sync-row { display: grid; grid-template-columns: 1fr 92px 40px; align-items: center; gap: 8px; padding: 8px; border: 1px solid var(--el-border-lighter); border-radius: var(--el-radius); background: var(--el-bg-card); margin-top: 6px; }
+.sd-detail-sync-name { font-weight: 500; color: var(--el-text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sd-sync-status { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--el-text-regular); white-space: nowrap; }
+.sd-sync-dot { font-weight: 700; }
+.sd-sync-dot.on { color: var(--el-color-success); }
+.sd-sync-dot.off { color: var(--el-color-danger); }
+.sd-row-menu { background: none; border: none; padding: 4px 6px; font-size: 18px; line-height: 1; color: var(--el-text-secondary); cursor: pointer; border-radius: var(--el-radius); justify-self: end; }
+.sd-row-menu:hover { color: var(--el-color-primary); background: var(--el-bg-fill); }
+/* unsynced row: prominent primary "sync" button (most recommended action) */
+.sd-row-sync { background: var(--el-color-primary); border: none; color: #fff; padding: 5px 9px; border-radius: var(--el-radius); cursor: pointer; display: inline-flex; align-items: center; justify-self: end; transition: background .12s; }
+.sd-row-sync:hover { background: var(--el-color-primary-light); }
+.sd-row-sync .i { width: 16px; height: 16px; }
+
+/* info field: copy button + absolute time */
+.sd-copy-btn { background: none; border: none; padding: 1px 3px; margin-left: 2px; color: var(--el-text-placeholder); cursor: pointer; border-radius: 3px; display: inline-flex; align-items: center; }
+.sd-copy-btn:hover { color: var(--el-color-primary); background: var(--el-bg-fill); }
+.sd-copy-btn .i { width: 13px; height: 13px; }
+.sd-detail-abs { font-size: 11px; color: var(--el-text-placeholder); margin-top: 3px; display: block; }
+
+/* long description fold */
+.sd-detail-desc.is-clamped { max-height: 6.6em; overflow: hidden; }
+.sd-detail-desc.is-expanded { max-height: none; }
+.sd-desc-toggle { margin: 2px 0 4px; align-self: flex-start; }
+
 /* Modal */
 .sd-modal-overlay { position: fixed; inset: 0; background: rgba(0, 0, 0, .5); display: flex; align-items: flex-start; justify-content: center; padding: 48px 16px; z-index: 30; overflow-y: auto; animation: sd-fade .15s ease; }
 @keyframes sd-fade { from { opacity: 0; } }
 .sd-modal { width: 100%; max-width: 440px; background: var(--el-bg-card); border-radius: var(--el-radius-lg); padding: 20px; box-shadow: 0 12px 32px rgba(0, 0, 0, .12); animation: sd-slide .18s ease; }
 .sd-modal.wide { max-width: 960px; }
+.sd-modal-detail { max-width: 640px; }
+.sd-row-menu-pop { position: fixed; z-index: 60; background: var(--el-bg-card); border: 1px solid var(--el-border-color); border-radius: var(--el-radius); box-shadow: 0 8px 24px rgba(0, 0, 0, .16); padding: 4px; min-width: 152px; }
+.sd-row-menu-item { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; background: none; border: none; padding: 7px 10px; font-size: 13px; color: var(--el-text-regular); cursor: pointer; font-family: inherit; border-radius: var(--el-radius); }
+.sd-row-menu-item:hover { background: var(--el-hover-fill); color: var(--el-color-primary); }
+.sd-row-menu-item .i { width: 15px; height: 15px; }
 @keyframes sd-slide { from { transform: translateY(12px); opacity: 0; } }
 .sd-modal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; padding-bottom: 14px; border-bottom: 1px solid var(--el-border-lighter); }
 .sd-modal-head h3 { font-size: 16px; font-weight: 600; margin: 0; display: flex; align-items: center; gap: 8px; color: var(--el-text-primary); }

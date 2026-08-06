@@ -11,6 +11,7 @@
   var selectedDrift = null;
   var skillQuery = "";
   var activeTag = "";
+  var focusedSkillId = null;
   var toastTimer = null;
 
   // ---- theme (light / dark) ----
@@ -35,6 +36,24 @@
   // ---- helpers ----
   function qs(sel) { return document.querySelector(sel); }
   function qsa(sel) { return Array.prototype.slice.call(document.querySelectorAll(sel)); }
+  function iconSvg(name) { return '<svg class="i" aria-hidden="true"><use href="#icon-' + name + '"></use></svg>'; }
+  function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]; }); }
+
+  // Copy text to clipboard with a graceful fallback for non-secure contexts.
+  function copyText(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      return navigator.clipboard.writeText(text);
+    }
+    return new Promise(function (resolve, reject) {
+      try {
+        var ta = document.createElement("textarea");
+        ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+        document.body.appendChild(ta); ta.select();
+        document.execCommand("copy"); document.body.removeChild(ta);
+        resolve();
+      } catch (e) { reject(e); }
+    });
+  }
 
   async function api(path, method, body) {
     var opt = { method: method, headers: { "Content-Type": "application/json" } };
@@ -76,6 +95,9 @@
     buildTagFilter();
     updateBatchBtn();
     updateThemeIcon();
+    buildSyncBadges();
+    wireSyncBadges();
+    renderFocus();
   }
 
   // ---- skill list search (name + description) + tag filter ----
@@ -159,6 +181,261 @@
     updateBatchBtn();
   }
 
+  // ---- skill-centric focus: click a skill to see which agents it is synced to ----
+  function focusSkill(id) {
+    focusedSkillId = (focusedSkillId === id) ? null : id;
+    renderFocus();
+  }
+  function renderFocus() {
+    var id = focusedSkillId;
+    // left: mark focused card
+    qsa(".sd-skill-card").forEach(function (c) {
+      c.classList.toggle("is-focused", !!id && c.getAttribute("data-skill-id") === id);
+    });
+    var banner = qs("#sd-focus-banner");
+    if (!banner) return;
+    // reset right side
+    qsa(".sd-agent-card").forEach(function (a) { a.classList.remove("has-focus-skill", "no-focus-skill"); });
+    qsa(".sd-skill-row").forEach(function (r) { r.classList.remove("is-focus", "is-dim"); });
+    if (!id) { banner.style.display = "none"; banner.innerHTML = ""; return; }
+
+    var nameEl = qs('.sd-skill-card[data-skill-id="' + id + '"] .sd-skill-name');
+    var name = nameEl ? nameEl.textContent : id;
+    var agents = qsa(".sd-agent-card");
+    var total = agents.length, synced = 0, lines = "";
+    agents.forEach(function (a) {
+      var aname = (a.querySelector(".sd-agent-name") || {}).textContent || a.getAttribute("data-agent-id");
+      var row = a.querySelector('.sd-skill-row[data-skill-id="' + id + '"]');
+      var present = !!row && row.getAttribute("data-status") && row.getAttribute("data-status") !== "not_synced";
+      if (present) synced++;
+      a.classList.toggle("has-focus-skill", !!present);
+      a.classList.toggle("no-focus-skill", !present);
+      if (row) {
+        row.classList.add("is-focus");
+        Array.prototype.slice.call(a.querySelectorAll(".sd-skill-row")).forEach(function (r) { if (r !== row) r.classList.add("is-dim"); });
+      }
+      lines += '<span class="sd-focus-line ' + (present ? "is-on" : "is-off") + '"><span class="sd-focus-mark">' +
+        (present ? "✔" : "✖") + "</span>" + aname + "</span>";
+    });
+    banner.style.display = "";
+    banner.innerHTML =
+      '<div class="sd-focus-head"><b>' + name + '</b>' +
+      '<span class="sd-muted sd-small">已同步到 ' + synced + ' / ' + total + ' 个 Agent</span>' +
+      '<span class="sd-focus-clear" data-action="clear-focus" title="取消聚焦">✕</span></div>' +
+      '<div class="sd-focus-list">' + lines + "</div>";
+  }
+
+  // Per-skill badge: "2/3 ✓" — how many agents this skill is synced to.
+  function buildSyncBadges() {
+    var agents = qsa(".sd-agent-card");
+    var total = agents.length;
+    qsa(".sd-skill-card").forEach(function (c) {
+      var id = c.getAttribute("data-skill-id");
+      var synced = 0;
+      agents.forEach(function (a) {
+        var row = a.querySelector('.sd-skill-row[data-skill-id="' + id + '"]');
+        if (row && row.getAttribute("data-status") && row.getAttribute("data-status") !== "not_synced") synced++;
+      });
+      var badge = c.querySelector(".sd-skill-sync");
+      var cnt = c.querySelector(".sd-sync-count");
+      var mark = c.querySelector(".sd-sync-mark");
+      if (!badge) return;
+      if (total === 0) {
+        if (cnt) cnt.textContent = "—";
+        if (mark) { mark.textContent = ""; mark.className = "sd-sync-mark"; }
+        badge.classList.add("is-empty");
+      } else if (synced === 0) {
+        if (cnt) cnt.textContent = "0/" + total;
+        if (mark) { mark.textContent = "✕"; mark.className = "sd-sync-mark off"; }
+        badge.classList.remove("is-full"); badge.classList.remove("is-empty");
+      } else {
+        if (cnt) cnt.textContent = synced + "/" + total;
+        if (mark) { mark.textContent = "✓"; mark.className = "sd-sync-mark on"; }
+        badge.classList.toggle("is-full", synced === total);
+        badge.classList.remove("is-empty");
+      }
+      badge.setAttribute("title", synced + " / " + total + " 个 Agent 已同步");
+    });
+  }
+
+  // Hover popover showing the per-agent sync breakdown for one skill.
+  var syncPop = null, syncPopTimer = null;
+  function hideSyncPop() { if (syncPop) { syncPop.remove(); syncPop = null; } }
+  function showSyncPop(badge) {
+    clearTimeout(syncPopTimer);
+    hideSyncPop();
+    var id = badge.getAttribute("data-skill-id");
+    var card = badge.closest(".sd-skill-card");
+    var name = card ? card.getAttribute("data-name") : id;
+    var agents = qsa(".sd-agent-card");
+    var onLines = "", offLines = "";
+    agents.forEach(function (a) {
+      var aname = (a.querySelector(".sd-agent-name") || {}).textContent || a.getAttribute("data-agent-id");
+      var row = a.querySelector('.sd-skill-row[data-skill-id="' + id + '"]');
+      var present = row && row.getAttribute("data-status") && row.getAttribute("data-status") !== "not_synced";
+      var line = '<div class="sd-sync-pop-line ' + (present ? "on" : "off") + '"><span>' + (present ? "✔" : "✕") + "</span>" + esc(aname) + "</div>";
+      if (present) onLines += line; else offLines += line;
+    });
+    var body = "";
+    if (onLines) body += '<div class="sd-sync-pop-group">已同步</div>' + onLines;
+    if (offLines) body += '<div class="sd-sync-pop-group">未同步</div>' + offLines;
+    if (!body) body = '<div class="sd-sync-pop-line off">暂无 Agent</div>';
+    syncPop = document.createElement("div");
+    syncPop.className = "sd-sync-pop";
+    syncPop.innerHTML = '<div class="sd-sync-pop-head">' + esc(name) + " · 同步状态</div>" + body;
+    document.body.appendChild(syncPop);
+    var r = badge.getBoundingClientRect();
+    var top = r.bottom + 6 + window.scrollY;
+    var left = r.right - syncPop.offsetWidth + window.scrollX;
+    if (left < 8) left = 8;
+    syncPop.style.top = top + "px";
+    syncPop.style.left = left + "px";
+    syncPop.addEventListener("mouseenter", function () { clearTimeout(syncPopTimer); });
+    syncPop.addEventListener("mouseleave", function () { syncPopTimer = setTimeout(hideSyncPop, 160); });
+  }
+  function wireSyncBadges() {
+    qsa(".sd-skill-sync").forEach(function (b) {
+      b.addEventListener("mouseenter", function () { showSyncPop(b); });
+      b.addEventListener("mouseleave", function () { syncPopTimer = setTimeout(hideSyncPop, 160); });
+    });
+  }
+
+  // Primary action on a skill card: open its detail (info + per-agent sync + actions).
+  function openSkillDetail(id) {
+    var card = qs('.sd-skill-card[data-skill-id="' + id + '"]');
+    if (!card) return;
+    var name = card.getAttribute("data-name") || id;
+    var desc = card.getAttribute("data-desc") || "";
+    var tags = (card.getAttribute("data-tags") || "").split(",").filter(Boolean);
+    var openBtn = card.querySelector('[data-action="open"]');
+    var openPath = openBtn ? openBtn.getAttribute("data-path") : "";
+    var timeEl = card.querySelector(".sd-skill-time");
+    var timeTxt = timeEl ? timeEl.textContent.trim() : "";
+    var timeAbs = timeEl ? (timeEl.getAttribute("data-abs") || "") : "";
+    var hashEl = card.querySelector(".sd-hash");
+    var hashTxt = hashEl ? hashEl.textContent.trim() : "";
+
+    var agents = qsa(".sd-agent-card");
+    var total = agents.length, synced = 0, rows = "";
+    agents.forEach(function (a) {
+      var aid = a.getAttribute("data-agent-id");
+      var aname = (a.querySelector(".sd-agent-name") || {}).textContent || aid;
+      var row = a.querySelector('.sd-skill-row[data-skill-id="' + id + '"]');
+      var status = row ? row.getAttribute("data-status") : "not_synced";
+      var present = status && status !== "not_synced";
+      if (present) synced++;
+      var stTxt = status === "synced" ? "已同步" : status === "stale" ? "待更新" : status === "drifted" ? "漂移" : "未同步";
+      // Operation column: unsynced = direct prominent sync (most recommended);
+      // synced/stale/drifted = "⋯" menu (more actions).
+      var opBtn = present
+        ? '<button class="sd-row-menu" data-action="row-menu" data-skill-id="' + id + '" data-agent-id="' + aid + '" data-status="' + status + '" title="操作">⋯</button>'
+        : '<button class="sd-row-sync" data-action="modal-sync" data-skill-id="' + id + '" data-agent-id="' + aid + '" title="同步到该 Agent">' + iconSvg("sync") + "</button>";
+      rows += '<div class="sd-detail-sync-row" data-status="' + status + '">' +
+        '<span class="sd-detail-sync-name">' + esc(aname) + "</span>" +
+        '<span class="sd-sync-status"><span class="sd-sync-dot ' + (present ? "on" : "off") + '">' + (present ? "✔" : "✕") + "</span>" + stTxt + "</span>" +
+        opBtn +
+        "</div>";
+    });
+
+    var pct = total ? Math.round((synced / total) * 100) : 0;
+    var progressWrap = total
+      ? '<div class="sd-sync-progress-wrap" data-action="toggle-sync-table" title="点击折叠 / 展开（' + pct + '% 已同步）">' +
+          '<div class="sd-sync-progress"><div class="sd-sync-bar" style="width:' + pct + '%"></div></div>' +
+          '<span class="sd-sync-count-txt">' + synced + " / " + total + " Agent</span>" +
+          '<span class="sd-sync-chevron" id="sd-sync-chevron">' + iconSvg("chevron-down") + "</span>" +
+        "</div>"
+      : "";
+
+    var infoHtml = '<div class="sd-label">信息</div>' +
+      '<div class="sd-detail-meta">' +
+      (hashTxt ? '<div class="sd-detail-field"><span class="sd-detail-field-label">Hash</span>' +
+        '<span class="sd-detail-field-val sd-mono">' + esc(hashTxt) +
+        ' <button class="sd-copy-btn" data-action="copy-hash" data-hash="' + esc(hashTxt) + '" title="复制 Hash">' + iconSvg("copy") + "</button></span></div>" : "") +
+      (timeTxt ? '<div class="sd-detail-field"><span class="sd-detail-field-label">更新时间</span>' +
+        '<span class="sd-detail-field-val">' + iconSvg("clock") + " " + esc(timeTxt) + "</span>" +
+        (timeAbs ? '<span class="sd-detail-abs" title="' + esc(timeAbs) + '">' + esc(timeAbs) + "</span>" : "") + "</div>" : "") +
+      "</div>";
+
+    var html =
+      '<div class="sd-modal-overlay" data-action="close-modal">' +
+        '<div class="sd-modal sd-modal-detail" data-stop="1">' +
+          '<div class="sd-modal-head"><h3>' + iconSvg("box") + " " + esc(name) + "</h3>" +
+            '<button class="sd-icon-btn" data-action="close-modal">' + iconSvg("close") + "</button></div>" +
+          (openPath ? '<div class="sd-detail-actions"><button class="sd-btn sd-btn-outline sd-btn-sm" data-action="open" data-path="' + openPath + '">' + iconSvg("folder-open") + " 在文件管理器中打开</button></div>" : "") +
+          (desc ? '<div class="sd-label">描述</div><p class="sd-detail-desc" id="sd-desc-body">' + esc(desc) + "</p>" +
+            '<button class="sd-link-btn sd-desc-toggle" data-action="toggle-desc" style="display:none">展开描述</button>' : "") +
+          (tags.length ? '<div class="sd-label">标签</div><div class="sd-skill-tags">' + tags.map(function (t) { return "<span class=\"sd-tag\">" + esc(t) + "</span>"; }).join("") + "</div>" : "") +
+          infoHtml +
+          '<div class="sd-label">同步状态</div>' +
+          '<div class="sd-detail-sync">' +
+            progressWrap +
+            '<div class="sd-detail-sync-table" id="sd-sync-table">' +
+              '<div class="sd-detail-sync-h"><span>Agent</span><span>状态</span><span>操作</span></div>' +
+              (rows || '<p class="sd-muted sd-small">还没有添加任何 Agent</p>') +
+            "</div>" +
+          "</div>" +
+        "</div>" +
+      "</div>";
+    qs("#modal-root").innerHTML = html;
+
+    // Long-description fold: show the toggle only when it actually overflows.
+    var descEl = qs("#sd-desc-body");
+    var toggle = qs(".sd-desc-toggle");
+    if (descEl && toggle && descEl.scrollHeight > descEl.clientHeight + 2) {
+      descEl.classList.add("is-clamped");
+      toggle.style.display = "";
+    }
+  }
+
+  // Per-row "⋯" menu in the skill detail dialog — unifies per-agent actions
+  // into one entry point (extensible: 重新同步 / 移除 / 查看差异 …).
+  var rowMenuPop = null;
+  function closeRowMenu() { if (rowMenuPop) { rowMenuPop.remove(); rowMenuPop = null; } }
+  function openRowMenu(btn) {
+    closeRowMenu();
+    var sid = btn.getAttribute("data-skill-id");
+    var aid = btn.getAttribute("data-agent-id");
+    var status = btn.getAttribute("data-status");
+    var present = status && status !== "not_synced";
+    var items = [];
+    if (!present) {
+      items.push({ label: "同步到该 Agent", action: "modal-sync", icon: "sync" });
+    } else {
+      items.push({ label: (status === "synced" ? "重新同步" : "推送更新"), action: (status === "synced" ? "modal-sync" : "modal-push"), icon: "sync" });
+      items.push({ label: "移除同步", action: "modal-unsync", icon: "trash" });
+      if (status === "stale" || status === "drifted") {
+        items.push({ label: "查看差异", action: "modal-diff", icon: "drift" });
+      }
+    }
+    var pop = document.createElement("div");
+    pop.className = "sd-row-menu-pop";
+    pop.innerHTML = items.map(function (it) {
+      return '<button class="sd-row-menu-item" data-action="' + it.action + '" data-skill-id="' + sid + '" data-agent-id="' + aid + '">' +
+        iconSvg(it.icon) + "<span>" + it.label + "</span></button>";
+    }).join("");
+    document.body.appendChild(pop);
+    rowMenuPop = pop;
+    var r = btn.getBoundingClientRect();
+    var ph = pop.offsetHeight, pw = pop.offsetWidth;
+    var top = r.bottom + 4 + window.scrollY;
+    if (top + ph - window.scrollY > window.innerHeight) top = r.top - ph - 4 + window.scrollY;
+    var left = r.right - pw + window.scrollX;
+    if (left < 8) left = 8;
+    pop.style.top = top + "px";
+    pop.style.left = left + "px";
+  }
+
+  async function modalSkillOne(skillId, agentId, kind) {
+    try {
+      if (kind === "unsync") await api("/api/unsync", "POST", { skillId: skillId, agentId: agentId });
+      else if (kind === "push") await api("/api/push", "POST", { skillId: skillId, agentId: agentId });
+      else await api("/api/sync", "POST", { skillId: skillId, agentId: agentId, mode: "" });
+      await loadDashboard();
+      openSkillDetail(skillId);
+      toast(kind === "unsync" ? "已移除同步（Base 不受影响）" : (kind === "push" ? "已推送变更" : "已同步"));
+    } catch (e) { toast(e.message, "error"); }
+  }
+
   // ---- modals ----
   function openModal(name, query) {
     return fetch("/partial/" + name + (query || "")).then(function (r) { return r.text(); }).then(function (html) {
@@ -212,8 +489,27 @@
 
   // ---- action dispatch ----
   function handleAction(el) {
+    closeRowMenu();
     var action = el.getAttribute("data-action");
     switch (action) {
+      case "copy-hash":
+        copyText(el.getAttribute("data-hash") || "").then(function () { toast("已复制 Hash"); })
+          .catch(function () { toast("复制失败", "error"); });
+        return;
+      case "toggle-desc": {
+        var d = qs("#sd-desc-body");
+        if (!d) return;
+        var expanded = d.classList.toggle("is-expanded");
+        el.textContent = expanded ? "收起描述" : "展开描述";
+        return;
+      }
+      case "toggle-sync-table": {
+        var t = qs("#sd-sync-table");
+        if (t) t.classList.toggle("is-collapsed");
+        var ch = qs("#sd-sync-chevron");
+        if (ch) ch.classList.toggle("is-rot");
+        return;
+      }
       case "close-modal":
         if (el.classList.contains("sd-modal-overlay")) {
           if (el === event_target) closeModal();
@@ -264,6 +560,13 @@
       case "open-add-agent": openModal("add-agent"); return;
       case "open-history": openModal("history"); return;
       case "toggle-theme": toggleTheme(); return;
+      case "clear-focus": focusedSkillId = null; renderFocus(); return;
+      case "focus-skill": focusSkill(el.getAttribute("data-skill-id")); return;
+      case "row-menu": openRowMenu(el); return;
+      case "modal-sync": modalSkillOne(el.getAttribute("data-skill-id"), el.getAttribute("data-agent-id"), "sync"); return;
+      case "modal-unsync": modalSkillOne(el.getAttribute("data-skill-id"), el.getAttribute("data-agent-id"), "unsync"); return;
+      case "modal-push": modalSkillOne(el.getAttribute("data-skill-id"), el.getAttribute("data-agent-id"), "push"); return;
+      case "modal-diff": openModal("drift?skillId=" + encodeURIComponent(el.getAttribute("data-skill-id")) + "&agentId=" + encodeURIComponent(el.getAttribute("data-agent-id"))); return;
       case "confirm-set-base": {
         var p = qs("#sd-base-input").value.trim();
         if (!p) { toast("请输入路径", "error"); return; }
@@ -366,6 +669,9 @@
   document.addEventListener("click", function (e) {
     event_target = e.target;
 
+    // close the per-row "⋯" menu when clicking anywhere else
+    if (rowMenuPop && !e.target.closest(".sd-row-menu-pop") && !e.target.closest(".sd-row-menu")) closeRowMenu();
+
     // directory browser navigation
     var browseEl = e.target.closest("[data-browse]");
     if (browseEl) { loadBrowse(browseEl.getAttribute("data-browse")); return; }
@@ -387,10 +693,16 @@
     var driftEl = e.target.closest("[data-drift]");
     if (driftEl) { selectDrift(driftEl.getAttribute("data-drift")); return; }
 
-    // skill card selection (ignore clicks on inner action buttons)
+    // skill card: checkbox = batch select; body = open detail (primary action);
+    // the sync badge (data-action="focus-skill") is the dedicated link entry.
+    var checkEl = e.target.closest(".sd-check");
+    if (checkEl) {
+      var cc = checkEl.closest(".sd-skill-card");
+      if (cc) { toggleSkill(cc.getAttribute("data-skill-id")); return; }
+    }
     var card = e.target.closest(".sd-skill-card");
     if (card && !e.target.closest("[data-action]")) {
-      toggleSkill(card.getAttribute("data-skill-id"));
+      openSkillDetail(card.getAttribute("data-skill-id"));
       return;
     }
 
@@ -401,7 +713,11 @@
 
   // Enter key confirms base path
   document.addEventListener("keydown", function (e) {
-    if (e.key === "Escape") { closeModal(); }
+    if (e.key === "Escape") {
+      if (rowMenuPop) { closeRowMenu(); return; }
+      if (focusedSkillId) { focusedSkillId = null; renderFocus(); return; }
+      closeModal();
+    }
     if (e.key === "Enter" && e.target && e.target.id === "sd-base-input") {
       handleAction({ getAttribute: function () { return "confirm-set-base"; }, classList: { contains: function () { return false; } } });
     }
